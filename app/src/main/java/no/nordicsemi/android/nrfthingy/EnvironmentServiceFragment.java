@@ -38,9 +38,9 @@
 
 package no.nordicsemi.android.nrfthingy;
 
-import android.app.Activity;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
+import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -49,11 +49,13 @@ import androidx.fragment.app.Fragment;
 import androidx.core.content.ContextCompat;
 import androidx.appcompat.widget.Toolbar;
 import android.text.SpannableString;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -77,6 +79,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import no.nordicsemi.android.nrfthingy.ClusterHead.AdvertiseClusterHead;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhErrors;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ScanClusterHead;
 import no.nordicsemi.android.nrfthingy.common.ScannerFragmentListener;
 import no.nordicsemi.android.nrfthingy.common.Utils;
 import no.nordicsemi.android.nrfthingy.database.DatabaseContract.ThingyDbColumns;
@@ -270,6 +275,19 @@ public class EnvironmentServiceFragment extends Fragment implements ScannerFragm
         }
     };
 
+    //==============
+    // PSG edit
+    private Button mAdvertiseButton;
+    private Button mNextButton;
+    private final String LOG_TAG="My Tag:";
+    AdvertiseClusterHead mAdvertiser= new AdvertiseClusterHead();
+    private byte[] mAdvData= {10,1,2,3,4,5,6,7,8,9,10};
+    byte[] mAdvSettings={AdvertiseClusterHead.ADV_SETTING_MODE_LOWLATENCY,
+            AdvertiseClusterHead.ADV_SETTING_SENDNAME_YES,
+            AdvertiseClusterHead.ADV_SETTING_SENDTXPOWER_NO};
+
+    ScanClusterHead mScanner=new ScanClusterHead();
+
     public interface EnvironmentServiceListener {
         LinkedHashMap<String, String> getSavedTemperatureData(final BluetoothDevice device);
 
@@ -326,6 +344,58 @@ public class EnvironmentServiceFragment extends Fragment implements ScannerFragm
         preparePressureGraph();
         prepareHumidityGraph();
         mDatabaseHelper = new DatabaseHelper(getActivity());
+
+        //PSG
+        mAdvertiseButton = (Button) rootView.findViewById(R.id.adv_btn);
+        mNextButton=(Button) rootView.findViewById(R.id.next_btn);
+
+        mAdvertiser.setAdvInterval(10000);
+        mAdvertiser.setAdvSettings(new byte[] {AdvertiseClusterHead.ADV_SETTING_MODE_LOWLATENCY,
+                                    AdvertiseClusterHead.ADV_SETTING_SENDNAME_YES,
+                                    AdvertiseClusterHead.ADV_SETTING_SENDTXPOWER_NO});
+
+
+        mScanner.BLE_scan();
+
+        mAdvertiseButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Resources res = getResources();
+                int error=mAdvertiser.initCLHAdvertiser();
+                if(error!= ClhErrors.ERROR_CLH_NO)
+                {
+                    mNextButton.setEnabled(false);
+                    mAdvertiseButton.setEnabled(false);
+
+                }
+
+                Log.i(LOG_TAG, mAdvertiseButton.getText().toString());
+                if (mAdvertiseButton.getText().toString().equals("Start Advertise")) {
+                    mAdvertiseButton.setText("Stop Advertise");
+                    mAdvData[0]=2;
+                    mAdvData[1]=1;
+                    mAdvertiser.updateCLHdata(mAdvData);
+                    mAdvData[0]=10;
+                    mNextButton.setEnabled(true);
+                }
+                else
+                {
+                    mAdvertiseButton.setText("Start Advertise");
+                    mNextButton.setEnabled(false);
+                    mAdvertiser.stopCLHdata();
+
+                }
+            }
+        });
+
+        mNextButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mAdvData[1]++;
+                mAdvertiser.updateCLHdata(mAdvData);
+            }
+        });
+
 
         if (toolbarEnvironment != null) {
             toolbarEnvironment.inflateMenu(R.menu.environment_card_menu);
