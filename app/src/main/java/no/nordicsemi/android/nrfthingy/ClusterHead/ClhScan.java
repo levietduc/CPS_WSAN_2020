@@ -19,18 +19,15 @@ public class ClhScan {
     private BluetoothAdapter mAdapter = BluetoothAdapter.getDefaultAdapter();
     private BluetoothLeScanner mCLHscanner ;
     private final String LOG_TAG="CLH Scanner:";
-    public static final int MIN_SCAN_RSSI_THRESHOLD=-80;    //min RSSI of receive packet from other clusterheads
-    private static final long SCAN_PERIOD = 60000*10;   //scan 10 minutes
-    private static final long REST_PERIOD=1000; //rest in 1 sec
+
     private Handler handler = new Handler();
     private Handler handler2 = new Handler();
     private boolean mScanning;
-    private byte mClhID=01;
+    private byte mClhID=1;
     private boolean mIsSink=false;
     private ScanSettings mScanSettings;
 
-    private static final int SCAN_HISTORY_LIST_SIZE=512;
-    private SparseArray<Integer> ClhScanHistoryArray=new SparseArray<>();
+    private SparseArray<Integer> ClhScanHistoryArray=new SparseArray();
 
     //private static final int MAX_PROCESS_LIST_ITEM=128;
     //private ClhAdvertisedData clhAdvData=new ClhAdvertisedData();
@@ -46,22 +43,13 @@ public class ClhScan {
     }
 
     public ClhScan(ClhAdvertise clhAdvObj,ClhProcessData clhProcDataObj)
-    {
+    {//constructor, set 2 alias to Clh advertiser and processor
         mClhAdvertiser=clhAdvObj;
         mClhAdvDataList=mClhAdvertiser.getAdvertiseList();
         mClhProcessData=clhProcDataObj;
         mClhProcDataList=clhProcDataObj.getProcessDataList();
     }
 
-    public void setAdvDataObject(ClhAdvertise clhAdvObj){
-        mClhAdvertiser=clhAdvObj;
-        mClhAdvDataList=mClhAdvertiser.getAdvertiseList();
-
-    }
-    public void setProcDataObject(ClhProcessData clhProObj){
-        mClhProcessData=clhProObj;
-        mClhProcDataList=mClhProcessData.getProcessDataList();
-    }
 
     public int BLE_scan() {
         boolean result=true;
@@ -88,7 +76,7 @@ public class ClhScan {
 
             //set filter: filter name
             ScanFilter filter = new ScanFilter.Builder()
-                    .setDeviceName(ClhAdvertise.cluster_head_name)
+                    .setDeviceName(ClhConst.clusterHeadName)
                     .build();
             filters.add(filter);
             Log.i(LOG_TAG, "filters"+ filters.toString());
@@ -111,9 +99,9 @@ public class ClhScan {
                             mScanning = true;
                             mCLHscanner.startScan(filters, mScanSettings, CLHScanCallback);
                         }
-                    },REST_PERIOD);
+                    },ClhConst.REST_PERIOD);
                 }
-            }, SCAN_PERIOD);
+            }, ClhConst.SCAN_PERIOD);
 
             mScanning = true;
             mCLHscanner.startScan(filters, ClhScanSettings, CLHScanCallback);
@@ -148,11 +136,13 @@ public class ClhScan {
                 //if( result == null || result.getDevice() == null)  return;
             }*/
 
-            if (result.getRssi()<MIN_SCAN_RSSI_THRESHOLD) {
+            //check RSSI to remove weak signal ones
+            if (result.getRssi()<ClhConst.MIN_SCAN_RSSI_THRESHOLD) {
                 Log.i(LOG_TAG,"low RSSI");
                 return;
             }
-            SparseArray<byte[]> manufacturerData = result.getScanRecord().getManufacturerSpecificData();
+
+            SparseArray<byte[]> manufacturerData = result.getScanRecord().getManufacturerSpecificData(); //get data
             processScanData(manufacturerData);
         }
 
@@ -169,34 +159,17 @@ public class ClhScan {
     };
 
 
-
-
-
-    /*public void setReturnAdvertiseArr(ArrayList<ClhAdvertisedData> arr)
-    {
-        mClhAdvDataList=arr;
-    }
-
-    public void setReturnProcessArr(ArrayList<ClhAdvertisedData> arr)
-    {
-        mClhProcDataList=arr;
-    }*/
-
-    /*private ClhAdvertise mAdvertiseObj;
-
-    public  void setAdvertiseObject(ClhAdvertise obj)
-    {
-        mAdvertiseObj=obj;
-    }*/
+/*process received data of BLE Manufacturer field
+ include:
+- Manufacturer Specification (in manufacturerData.key): "unique packet ID", include
+            2 bytes: 0XAABB: AA: Source Cluster Head ID: 0-127
+                            BB: Packet ID: 0-254 (unique for each packet)
+ - Manufacturer Data (in manufacturerData.value): remained n data bytes (manufacturerData.size())
+-------------------*/
 
     public void processScanData(SparseArray<byte[]> manufacturerData) {
 
-        /*received data of BLE Manufaturer field in "manufacturerData" include:
-        - Manu Spec (in manufacturerData.key): "unique packet ID", include
-                    2 bytes: 0XAABB: AA: Source Cluster Head ID: 0-127
-                                    BB: Packet ID: 0-254
-         - Manu Data (in manufacturerData.value): remained n data bytes (manufacturerData.size())
-        -------------------*/
+
         if(manufacturerData==null)
         {
             Log.i(LOG_TAG, "no Data");
@@ -205,7 +178,7 @@ public class ClhScan {
         }
         int receiverID=manufacturerData.keyAt(0);
 
-        //reflected data (received cluster head ID = device Clh ID skip
+        //reflected data (received cluster head ID = device Clh ID) -> skip
         if(mClhID==(receiverID>>8))
         {
             Log.i(LOG_TAG,"reflected data, mClhID "+mClhID +", recv:" +(receiverID>>8) );
@@ -222,7 +195,7 @@ public class ClhScan {
         if (ClhScanHistoryArray.indexOfKey(manufacturerData.keyAt(0))<0)
         {//not yet received
             //history not yet full, update new "unique packet ID" to history list, reset life counter
-            if(ClhScanHistoryArray.size()<SCAN_HISTORY_LIST_SIZE)
+            if(ClhScanHistoryArray.size()<ClhConst.SCAN_HISTORY_LIST_SIZE)
             {
                 ClhScanHistoryArray.append(manufacturerData.keyAt(0),0);
             }
@@ -234,31 +207,16 @@ public class ClhScan {
 
             clhAdvData.parcelAdvData(manufacturerData,0);
             if(mIsSink)
-            {//if this Cluster Head is the Sink node, add data to waiting process list
-                //process data
+            {//if this Cluster Head is the Sink node (ID=0), add data to waiting process list
                     mClhProcessData.addProcessPacketToBuffer(clhAdvData);
-                    //mClhProcDataList.add(clhAdvData);
                     Log.i(LOG_TAG, "Add data to process list, len:" + mClhProcDataList.size());
             }
-            else {// add data to advertising list to forward
-                //forward data
-
-               //vinh
-                if(mClhAdvertiser==null)
-                {
-                    Log.i(LOG_TAG,"null adv");
-
-                }
-                else {
-
-
+            else {//normal CLuster Head (ID 0..127) add data to advertising list to forward
                     mClhAdvertiser.addAdvPacketToBuffer(clhAdvData,false);
                     Log.i(LOG_TAG, "Add data to advertised list, len:" + mClhAdvDataList.size());
                     Log.i(LOG_TAG, "Advertise list at " + (mClhAdvDataList.size() - 1) + ":"
                             + Arrays.toString(mClhAdvDataList.get(mClhAdvDataList.size() - 1).getParcelClhData()));
-                }
             }
-
         }
     }
 
@@ -266,15 +224,19 @@ public class ClhScan {
         mClhID=clhID;
         mIsSink=isSink;
     }
-  /*  public static String bytesToHex(byte[] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        for (int j = 0; j < bytes.length; j++) {
-            int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
-            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
-        }
-        return new String(hexChars);
-    }*/
+
+    //set alias to Clh advertiser
+    public void setAdvDataObject(ClhAdvertise clhAdvObj){
+        mClhAdvertiser=clhAdvObj;
+        mClhAdvDataList=mClhAdvertiser.getAdvertiseList();
+
+    }
+
+    //set alias to Clh processor
+    public void setProcDataObject(ClhProcessData clhProObj){
+        mClhProcessData=clhProObj;
+        mClhProcDataList=mClhProcessData.getProcessDataList();
+    }
 
 }
 

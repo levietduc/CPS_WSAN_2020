@@ -4,20 +4,21 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 public class ClusterHead {
+    private static final int MAX_ADVERTISE_LIST_ITEM=ClhConst.MAX_ADVERTISE_LIST_ITEM; //max items in waiting list for advertising
+    private static final int MAX_PROCESS_LIST_ITEM=ClhConst.MAX_PROCESS_LIST_ITEM; //max items in waiting list for processing
     private boolean mIsSink=false;
     private byte mClhID=1;
-    public static final int MAX_ADVERTISE_LIST_ITEM=512;
     private final ArrayList<ClhAdvertisedData> mClhAdvDataList =new ArrayList<ClhAdvertisedData>(MAX_ADVERTISE_LIST_ITEM);
     private final ClhAdvertise mClhAdvertiser=new ClhAdvertise(mClhAdvDataList,MAX_ADVERTISE_LIST_ITEM);
 
     private final ClhScan mClhScanner=new ClhScan();
 
-    public static final int MAX_PROCESS_LIST_ITEM=128;
     private final ArrayList<ClhAdvertisedData> mClhProcDataList =new ArrayList<>(MAX_PROCESS_LIST_ITEM);
     private final ClhProcessData mClhProcessData=new ClhProcessData(mClhProcDataList,MAX_PROCESS_LIST_ITEM);
-    public ClusterHead(){};
+    public ClusterHead(){}
 
-
+    //construtor,
+    //params: id: cluster head ID
     public ClusterHead(byte id)
     {
         if(id>127) id-=127;
@@ -35,21 +36,22 @@ public class ClusterHead {
         return mClhScanner;
     }
 
-    public int initClhBLE(long advInterval)
+    // init Cluster Head BLE: include
+    // init Advertiser
+    // init Scanner
+    public int initClhBLE(long advertiseInterval)
     {
         int error;
-        //mClhAdvertiser=new ClhAdvertise(mClhAdvDataList,MAX_ADVERTISE_LIST_ITEM);
-        error=initClhBLEAdvertiser(advInterval);
+        error=initClhBLEAdvertiser(advertiseInterval);
         if(error!=ClhErrors.ERROR_CLH_NO) return error;
-        //ClhProcessData mClhProcessData=new ClhProcessData(mClhProcDataList,MAX_PROCESS_LIST_ITEM);
-        //mClhScanner=new ClhScan();
+
         error=initClhBLEScaner();
         if(error!=ClhErrors.ERROR_CLH_NO) return error;
         return error;
     }
 
     public int initClhBLEAdvertiser(long advInterval) {
-        int error=ClhErrors.ERROR_CLH_NO;
+        int error;
         mClhAdvertiser.setAdvInterval(advInterval);
         mClhAdvertiser.setAdvClhID(mClhID,mIsSink);
         mClhAdvertiser.setAdvSettings(new byte[]{ClhAdvertise.ADV_SETTING_MODE_LOWLATENCY,
@@ -64,7 +66,6 @@ public class ClusterHead {
         int error;
         mClhScanner.setAdvDataObject(mClhAdvertiser);
         mClhScanner.setProcDataObject(mClhProcessData);
-        //mScanner.setReturnAdvertiseArr(mAdvDataArr);
         mClhScanner.setClhID(mClhID,mIsSink);
         error=mClhScanner.BLE_scan();
 
@@ -78,14 +79,8 @@ public class ClusterHead {
     public ArrayList<ClhAdvertisedData> getAdvertiseList() {return mClhAdvDataList;}
     public final boolean setClhID(byte id){
         mClhID=id;
-        if(mClhID==0)
-        {
-            mIsSink=true;
-        }
-        else
-        {
-            mIsSink=false;
-        }
+        if (mClhID == 0) mIsSink = true;
+        else mIsSink = false;
         if(mClhAdvertiser!=null)    mClhAdvertiser.setAdvClhID(mClhID,mIsSink);
         if(mClhScanner!=null) mClhScanner.setClhID(mClhID,mIsSink);
         return mIsSink;
@@ -97,7 +92,7 @@ public class ClusterHead {
 
     public void clearClhAdvList()
     {
-        mClhAdvertiser.clearAdvList();;
+        mClhAdvertiser.clearAdvList();
     }
 
 }

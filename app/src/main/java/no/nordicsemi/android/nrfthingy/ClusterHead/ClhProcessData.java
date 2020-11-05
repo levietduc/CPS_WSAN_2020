@@ -13,8 +13,6 @@ public class ClhProcessData {
     private ArrayList<ClhAdvertisedData> mClhProcessDataList;
 
 
-    Handler handler = new Handler();
-
 
     public ClhProcessData()
     {

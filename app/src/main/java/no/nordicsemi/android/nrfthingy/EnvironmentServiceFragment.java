@@ -385,7 +385,7 @@ public class EnvironmentServiceFragment extends Fragment implements ScannerFragm
                 {
                     mAdvertiseButton.setText("Start Advertise");
                     mNextButton.setEnabled(false);
-                    mAdvertiser.stopCLHdata();
+                    mAdvertiser.stopAdvertiseClhData();
 
                 }
             }

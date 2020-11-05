@@ -5,29 +5,20 @@ import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.AdvertiseSettings;
 import android.bluetooth.le.BluetoothLeAdvertiser;
-import android.content.res.Resources;
 import android.os.CountDownTimer;
-import android.os.Handler;
 import android.os.ParcelUuid;
 import android.util.Log;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
 
-import no.nordicsemi.android.nrfthingy.R;
-
-
 
 public class ClhAdvertise {
 
+    private final static String CLH_NAME=ClhConst.clusterHeadName; //common name for indentifying a Cluster Head
     private final String LOG_TAG = "CLH Advertising"; //Tag for debug logging via USB
-
-    public final static String cluster_head_name="CH";
-
-
     public final static int ADV_SETTING_BYTE_MODE = 0;
     public final static int ADV_SETTING_BYTE_SENDNAME = 1;
     public final static int ADV_SETTING_BYTE_SENDTXPOWER = 2;
@@ -43,16 +34,9 @@ public class ClhAdvertise {
     public final static int ADV_SETTING_SENDTXPOWER_NO = 0;
     public final static int ADV_SETTING_SENDTXPOWER_YES = 1;
 
-
-
-    private static final long ADVERTISE_PERIOD= 60000;
-
-
     private static String mUUId = null;
-    private static byte[] mClusterHeadID= {0x12,0x34};
     private static int mUniqueManuID=1510;
     private static ParcelUuid mPUUID;
-    private static boolean mIsAdvertsing=false;
     private static BluetoothLeAdvertiser mAdvertiser = BluetoothAdapter.getDefaultAdapter().getBluetoothLeAdvertiser();
 
     private final static int BLE_CLH_ADVERTISING_STATUS_DISABLE=256;
@@ -60,100 +44,31 @@ public class ClhAdvertise {
     private final static int BLE_CLH_ADVERTISING_STATUS_START=1;
     private final static int BLE_CLH_ADVERTISING_STATUS_NO_DATA=2;
     private final static int BLE_CLH_ADVERTISING_STATUS_STOP_WAIT=100;
+    private final static long MAX_ADVERTISING_INTERVAL=10000;  //max 10s for an advertising packet interval
+    private final static int MAX_ADVERTISE_LIST_ITEM=64; //max queue list for advertising
 
-    private static int mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_DISABLE;
 
+    private int mMaxAdvAllowable=MAX_ADVERTISE_LIST_ITEM;
+    private int mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_DISABLE;
     private CountDownTimer mAdvertisingTimer;
     private long mAdvInterval=0;
-    private final static long MAX_ADVERTISING_DURATION=10*60*1000;  //max 10 minutes for an advertising slot
-    private final static long MAX_ADVERTISING_INTERVAL=10000;  //max ten seconds for an advertising packet interval
-    private byte[] mAdvsettings=new byte[16];
+    private byte[] mAdvsettings=new byte[32];
     private byte mClhID=1;
     private boolean mIsSink=false;
-
-    /* control:
-            ADV_CLH_CONTROL_STOP: stop advertising
-            ADV_CLH_CONTROL_INIT: start and create a new UUID (initial)
-            ADV_CLH_CONTROL_START: start advertising
-            ADV_CLH_CONTROL_UPDATE: update data
-       setting[]:
-            [0]: ADV_SETTING_BYTE_ENERGY,Energy mode:
-                    LOW_POWER_MODE ADV_SETTING_ENERGY_LOWPOWER (default)
-                    BALANCE_MODE ADV_SETTING_ENERGY_BALANCE
-                    HIGH_LATENCY_MODE ADV_SETTING_ENERGY_LOWLATENCY
-            [1]: ADV_SETTING_BYTE_SENDNAME,send name:
-                0: ADV_SETTING_SENDNAME_NO
-                1: ADV_SETTING_SENDNAME_YES (default)
-            [2]: ADV_SETTING_BYTE_SENDTXPOWER,send TxPower
-                0: ADV_SETTING_SENDTXPOWER_NO (default)
-                1: ADV_SETTING_SENDTXPOWER_YES
-            [3]: ADV_SETTING_BYTE_SENDMANUFACTURER, send type
-                 0:  ADV_SETTING_SENDMANUFACTURER_NO: send UUID
-                1: ADV_SETTING_SENDMANUFACTURER_YES: send manufacturer type;
-
-       data[]:
-       [0]: data length
-       [1..n]: data
-     */
-    private final static int MAX_ADVERTISE_LIST_ITEM=64;
-    private int mMaxAdvAllowable=MAX_ADVERTISE_LIST_ITEM;
-
+    private byte mCurrentPacketID= (byte) 1;
     private ArrayList<ClhAdvertisedData >mClhAdvDataList;
 
-    public ClhAdvertise(){
+    public ClhAdvertise(){//constructor with no params
         mClhAdvDataList= new ArrayList<ClhAdvertisedData>(MAX_ADVERTISE_LIST_ITEM);
     }
+
+    //constructor with param
     public ClhAdvertise(ArrayList<ClhAdvertisedData> clhAdvDataList, int maxAdvAllowable){
         mMaxAdvAllowable=maxAdvAllowable;
         mClhAdvDataList=clhAdvDataList;
-        //vinh
-        Log.i(LOG_TAG,"size array list"+mClhAdvDataList.size() );
-    }
-
-    public void setAdvClhID(byte clhID, boolean isSink){
-        mClhID=clhID;
-        mIsSink=isSink;
-    }
-
-    public void setAdvSettings(byte[] settings)
-    {
-        Log.i(LOG_TAG, "Start Setting Advertizing params func");
-
-        if(settings==null)
-        {   // default advertising: low power, name and UUID , no TX power
-            mAdvsettings[ADV_SETTING_BYTE_MODE] = ADV_SETTING_MODE_LOWPOWER;
-            mAdvsettings[ADV_SETTING_BYTE_SENDNAME] = ADV_SETTING_SENDNAME_YES;
-            mAdvsettings[ADV_SETTING_BYTE_SENDTXPOWER] = ADV_SETTING_SENDTXPOWER_NO;
-
-        }
-        else{
-            int len;
-            if(mAdvsettings.length<settings.length)
-                len=mAdvsettings.length;
-            else
-                len=settings.length;
-            mAdvsettings=Arrays.copyOfRange(settings,0,len);
-        }
-        Log.i(LOG_TAG, "End Setting Advertizing params func");
-    }
-
-    public void setAdvInterval(long interval)
-    {
-        if (interval<=0)
-        {
-            mAdvInterval=MAX_ADVERTISING_INTERVAL;
-        }
-        else
-        {
-            mAdvInterval=interval;
-        }
     }
 
 
-    public byte[] getAdvSettings()
-    {
-        return mAdvsettings;
-    }
 
     public int initCLHAdvertiser()
     {
@@ -165,51 +80,32 @@ public class ClhAdvertise {
 
 
         if (mUUId == null) {
+            //get random UUID
             mUUId = UUID.randomUUID().toString().toUpperCase();
             mPUUID = new ParcelUuid(UUID.fromString(mUUId));
 
-            //set name =PS + UUID octa [2,3]
-            //String str2 = "PS "+ uniqueId.substring(4,8);
-            String str1=cluster_head_name;
-            if (BluetoothAdapter.getDefaultAdapter().setName(str1) == false) {
+            if (!BluetoothAdapter.getDefaultAdapter().setName(ClhConst.clusterHeadName)) {
                 Log.i(LOG_TAG, "Advertiser: set name fail" );
                 return ClhErrors.ERROR_CLH_BLE_SETNAME_FAIL;
             }
-            Log.i(LOG_TAG, "Name:" +BluetoothAdapter.getDefaultAdapter().getName());
+            Log.i(LOG_TAG, "Set Name:" +BluetoothAdapter.getDefaultAdapter().getName());
 
-            //set 2 bytes of unique ID to include to Manufaturer ID
-            mUniqueManuID = Integer.parseInt(mUUId.substring(4,8), 16);
-            Log.i(LOG_TAG, "UUID " +mUUId);
-            Log.i(LOG_TAG, "Advertiser name "+str1 );
-            Log.i(LOG_TAG, "Advertiser: ID int "+ mUniqueManuID);
         }
         //start default advertising: low power, name and UUID , no TX power
         advsettings[ADV_SETTING_BYTE_MODE] = ADV_SETTING_MODE_LOWPOWER;
         advsettings[ADV_SETTING_BYTE_SENDNAME] = ADV_SETTING_SENDNAME_YES;
         advsettings[ADV_SETTING_BYTE_SENDTXPOWER] = ADV_SETTING_SENDTXPOWER_NO;
 
-        if(mBleClhAdvertisingStatus==BLE_CLH_ADVERTISING_STATUS_START){
-            //on advertising -> stop advertiser
-            stopCLHdata();
-            /*mAdvertiser.stopAdvertising(advertisingCallback);
-            if(mAdvertisingTimer!=null){
-                mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_STOP_WAIT;
-                mAdvertisingTimer.cancel();
-            }
-            else{
-                mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_STOP;
-            }*/
+        //on advertising -> stop advertiser
+        if(mBleClhAdvertisingStatus==BLE_CLH_ADVERTISING_STATUS_START)  stopAdvertiseClhData();
 
-        }
-
-
-        //set up timer for each packet advertising, and
+        //set up timer for each packet advertising, expire interval in mAdvInterval
         mAdvertisingTimer=new CountDownTimer(mAdvInterval,100) {
             @Override
-            public void onTick(long millisUntilFinished) {//on timer experire event callback
+            public void onTick(long millisUntilFinished) {//tick, not used
             }
 
-            @Override //not used
+            @Override
             public void onFinish() {
                 if((mBleClhAdvertisingStatus==BLE_CLH_ADVERTISING_STATUS_STOP_WAIT)||
                         (mBleClhAdvertisingStatus==BLE_CLH_ADVERTISING_STATUS_STOP))
@@ -222,18 +118,6 @@ public class ClhAdvertise {
                     mAdvertiser.stopAdvertising(advertisingCallback);
                     nextAdvertisingPacket(); //advertise next packet
                 }
-
-                //stop advertising for 1sec if still running, then restart
-                       /* advertiser.stopAdvertising(advertisingCallback);
-                        if (bleClhAdvertisingStatus == BLE_CLH_ADVERTISING_STATUS_START) {
-                            Handler handler = new Handler().postDelayed(new Runnable() {
-                                @Override
-                                public void run() {
-                                    advertiser.startAdvertisingSet(advertisingCallback);
-                                    Log.i(LOG_TAG, "Stop scan");
-                                }
-                            }, 1000);
-                        }*/
             }
         };
         Log.i(LOG_TAG,"End Initializing func");
@@ -244,6 +128,11 @@ public class ClhAdvertise {
         return ClhErrors.ERROR_CLH_NO;
     }
 
+    /*update an advertiser with new data
+    1st stop the current advertising
+    2nd check data and previous settings
+    3nd restart advertiser for new data and previous settings
+     */
     public int updateCLHdata(byte data[])
     {
         int error;
@@ -256,16 +145,11 @@ public class ClhAdvertise {
 
         if (data==null)
         {
-            advData[0]=1;
+            return ClhErrors.ERROR_CLH_ADV_NO_DATA;
         }
         else
         {
-            if(advData.length>=data.length){
-                length=data.length;
-            }
-            else{
-                length=advData.length;
-            }
+            length=Math.min(data.length,advData.length);
             advData= Arrays.copyOfRange(data,0, length);
         }
 
@@ -275,7 +159,7 @@ public class ClhAdvertise {
         }
 
         Log.i(LOG_TAG, "Advertiser: update data");
-        stopCLHdata();
+        stopAdvertiseClhData();
         error=startAdvertiser(mAdvsettings,advData);
 
         Log.i(LOG_TAG, "End update data func");
@@ -283,38 +167,100 @@ public class ClhAdvertise {
 
     }
 
-    public void stopCLHdata()
-    {
 
-        Log.i(LOG_TAG, "Stop CLH Advertiser func");
-        mAdvertiser.stopAdvertising(advertisingCallback);
-        if(mAdvertisingTimer!=null){
-            mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_STOP_WAIT;
-            mAdvertisingTimer.cancel();//stop timer
+    //------------------------
+    // advertising next data in the waiting list
+    public void nextAdvertisingPacket(){
+
+        if (mClhAdvDataList.size()>0)
+        {//list not empty, advertise item 0 in the list
+            byte[] mAdvData = mClhAdvDataList.get(0).getParcelClhData();
+            mClhAdvDataList.remove(0);
+            updateCLHdata(mAdvData);
+            Log.i(LOG_TAG,"new data: size:"+mClhAdvDataList.size() + ",data:" +Arrays.toString(mAdvData));
         }
-        else{
-            mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_STOP;
+        else
+        {//empty list
+            mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_NO_DATA;
+            mAdvertisingTimer.start(); // start timer to periodly check (100ms) the list later
         }
-        Log.i(LOG_TAG, "End Stop CLH Advertizer func");
+    }
+
+    /*==========================
+    Add a packet to queuing buffer for advertising
+    @parma:
+    data: data to be advertising
+    isOrginal: =true: packet is from internal process of this cluster head.
+            =false: packet received from other cluster head, need forwarding
+     */
+    public void addAdvPacketToBuffer(ClhAdvertisedData data,boolean isOrginal)
+    {
+        if(mClhAdvDataList.size()<mMaxAdvAllowable) {
+            if(isOrginal) {//this packet come from this device-> increase PacketID
+                mCurrentPacketID++;
+                data.setPacketID(mCurrentPacketID);
+            }
+            else
+            {//received packet over BLE scan, from other cluster head -> increase hopscount
+                byte hopcounts=data.getHopCounts();
+                hopcounts++;
+                data.setHopCount(hopcounts);
+            }
+            mClhAdvDataList.add(data);
+            Log.i(LOG_TAG,"add Adv packet, size:"+mClhAdvDataList.size());
+        }
     }
 
 
-    private int checkBLEAdvertiser()
+    //----------------------------------------------------
+    // parcel Sound data and add to waiting list for advertising
+    private static int mSoundcount=0;
+    public void addAdvSoundData(byte[]data)
     {
-        //verify BLE available
-        if (!BluetoothAdapter.getDefaultAdapter().isMultipleAdvertisementSupported()) {
-            Log.i(LOG_TAG, "Multiple advertisement not supported");
-            return ClhErrors.ERROR_CLH_ADV_MULTI_ADVERTISER;
+
+        if((data!=null) && data.length>0) {
+            //in this demo, only the first data from the sound stream is used for sending
+            byte[] arr=new byte[4];
+            arr[3]=data[0];
+            arr[2]=data[1];
+            arr[0]=arr[1] = 0;
+            int sounddata=ByteBuffer.wrap(arr).getInt();
+            if (sounddata>32767) sounddata=sounddata-65535;
+            //Log.i(LOG_TAG,"sound data:"+sounddata);
+
+            if(mSoundcount++==100)
+            {//wait 100 dataset to reduce the load, update the sound data to advertising list
+                ClhAdvertisedData advData = new ClhAdvertisedData();
+                advData.setSourceID(mClhID);
+                advData.setDestId((byte) 0);
+                advData.setThingyDataType((byte) 10);
+                advData.setThingyId((byte) 1);
+                advData.setHopCount((byte) 0);
+                advData.setSoundPower(sounddata);
+                addAdvPacketToBuffer(advData,true);
+                ClhAdvertisedData temp=mClhAdvDataList.get(mClhAdvDataList.size()-1);
+                Log.i(LOG_TAG,"add new sound data:"+ Arrays.toString( temp.getParcelClhData()));
+                mSoundcount=0;
+            }
         }
-        if ((mAdvertiser=BluetoothAdapter.getDefaultAdapter().getBluetoothLeAdvertiser()) == null) {
-            Log.i(LOG_TAG, "BLE not supported");
-            return ClhErrors.ERROR_CLH_BLE_NOT_ENABLE;
-        }
-        return ClhErrors.ERROR_CLH_NO;
     }
 
-
-
+    /*----------
+ Start advertising "data"
+ @param
+  data[]: data
+  settings[]: advertising mode
+             [0]: ADV_SETTING_BYTE_ENERGY,Energy mode:
+                     LOW_POWER_MODE ADV_SETTING_ENERGY_LOWPOWER (default)
+                     BALANCE_MODE ADV_SETTING_ENERGY_BALANCE
+                     HIGH_LATENCY_MODE ADV_SETTING_ENERGY_LOWLATENCY
+             [1]: ADV_SETTING_BYTE_SENDNAME,send name:
+                 0: ADV_SETTING_SENDNAME_NO
+                 1: ADV_SETTING_SENDNAME_YES (default)
+             [2]: ADV_SETTING_BYTE_SENDTXPOWER,send TxPower
+                 0: ADV_SETTING_SENDTXPOWER_NO (default)
+                 1: ADV_SETTING_SENDTXPOWER_YES
+ --------*/
     private int startAdvertiser(byte[] settings, byte[] data) {
         //setting and start advertiser
         //@param: settings: configuration
@@ -358,7 +304,7 @@ public class ClhAdvertise {
             advDataBuilder.setIncludeTxPowerLevel(false);
         }
 
-        if(data.length<3)
+        if(data.length<2)
         {
             Log.i(LOG_TAG, "send UUID only: "+mPUUID);
             advDataBuilder.addServiceUuid(mPUUID);
@@ -367,7 +313,7 @@ public class ClhAdvertise {
         {
             Log.i(LOG_TAG, "current length: "+ advDatalen);
             advDatalen=data.length+advDatalen+3 + 2 ; // include: 3(default) + name (vary:option) + txpower (3:option)
-                                            // + 2(setting for manufacturer) + data
+            // + 2(setting for manufacturer) + data
             if(advDatalen>31)
             {//if data length too long, send UUID
                 Log.i(LOG_TAG, "Too long advertise data:" + advDatalen);
@@ -383,13 +329,6 @@ public class ClhAdvertise {
                 Log.i(LOG_TAG, "send data length:" +len);
                 Log.i(LOG_TAG, "Manu Spec: 0x" + data[0] + ","+data[1]);
                 Log.i(LOG_TAG, "Manu Data: "+ Arrays.toString(advData));
-                //advDataBuilder.addManufacturerData(mUniqueManuID,advData);
-
-                /*String str1=mUUId.substring(4,8);
-                Log.i(LOG_TAG, "UUID(16 bits) :" + str1);
-                Log.i(LOG_TAG, "send manufature data, total length:" +advDatalen);
-                String s = new String(advData, StandardCharsets.UTF_8);
-                Log.i(LOG_TAG, "send manufature data, data:" + Arrays.toString(advData));*/
             }
         }
         AdvertiseData sendData = advDataBuilder.build();
@@ -401,7 +340,22 @@ public class ClhAdvertise {
         return ClhErrors.ERROR_CLH_NO;
     }
 
-    private AdvertiseCallback advertisingCallback = new AdvertiseCallback() {
+    public void stopAdvertiseClhData()
+    {
+
+        Log.i(LOG_TAG, "Stop CLH Advertiser func");
+        mAdvertiser.stopAdvertising(advertisingCallback);
+        if(mAdvertisingTimer!=null){
+            mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_STOP_WAIT;
+            mAdvertisingTimer.cancel();//stop timer
+        }
+        else{
+            mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_STOP;
+        }
+        Log.i(LOG_TAG, "End Stop CLH Advertizer func");
+    }
+
+    private final AdvertiseCallback advertisingCallback = new AdvertiseCallback() {
         @Override
         public void onStartSuccess(AdvertiseSettings settingsInEffect) {
             super.onStartSuccess(settingsInEffect);
@@ -418,134 +372,18 @@ public class ClhAdvertise {
         }
     };
 
-/*
-broadcast packet:
-destination: 2 bytes
-Packet ID: 1 byte
-Thingy: 1 byte
-data type: 1 byte
-data[]
-
-
-block:
-
-
- */
-    //public static final int MAX_ADVERTISE_LIST_ITEM=128;
-    //private ArrayList<ClhAdvertisedData> mClhAdvDataList=super.mClhAdvDataList; //=new ArrayList<>(MAX_ADVERTISE_LIST_ITEM);
-    private byte[] mAdvData=new byte[64];
-    private byte mCurrentPacketID= (byte) 1;
-    /*public void setAdvertiseList(ArrayList<ClhAdvertisedData> arrList)
+    private int checkBLEAdvertiser()
     {
-         mClhAdvDataList=arrList;
-    }*/
-
-    public ArrayList<ClhAdvertisedData> getAdvertiseList()
-    {
-        return mClhAdvDataList;
-    }
-
-    public void addAdvPacketToBuffer(ClhAdvertisedData data,boolean isOrginal)
-    {
-        if(mClhAdvDataList.size()<mMaxAdvAllowable) {
-            if(isOrginal) {//this packet come from this device-> increase PacketID
-                mCurrentPacketID++;
-                data.setPacketID(mCurrentPacketID);
-            }
-            else
-            {//received packet over BLE scan, from other cluster head -> increase hopscount
-                byte hopcounts=data.getHopCounts();
-                hopcounts++;
-                data.setHopCount(hopcounts);
-            }
-            mClhAdvDataList.add(data);
-            Log.i(LOG_TAG,"add Adv packet, size:"+mClhAdvDataList.size());
+        //verify BLE available
+        if (!BluetoothAdapter.getDefaultAdapter().isMultipleAdvertisementSupported()) {
+            Log.i(LOG_TAG, "Multiple advertisement not supported");
+            return ClhErrors.ERROR_CLH_ADV_MULTI_ADVERTISER;
         }
-    }
-
-    public void nextAdvertisingPacket(){//advertising next data
-        //Log.i(LOG_TAG,"next packet");
-
-        if (mClhAdvDataList.size()>0)
-        {//list not empty, advertise item 0 in the list
-            mAdvData=mClhAdvDataList.get(0).getParcelClhData();
-            Log.i(LOG_TAG,"new data"+Arrays.toString(mAdvData));
-            mClhAdvDataList.remove(0);
-            Log.i(LOG_TAG,"array size:" + mClhAdvDataList.size());
-            if(mClhAdvDataList.size()>0) {
-                Log.i(LOG_TAG, "next data" + Arrays.toString(mClhAdvDataList.get(0).getParcelClhData()));
-            }
-            updateCLHdata(mAdvData);
+        if ((mAdvertiser=BluetoothAdapter.getDefaultAdapter().getBluetoothLeAdvertiser()) == null) {
+            Log.i(LOG_TAG, "BLE not supported");
+            return ClhErrors.ERROR_CLH_BLE_NOT_ENABLE;
         }
-        else
-        {//empty list
-            mBleClhAdvertisingStatus=BLE_CLH_ADVERTISING_STATUS_NO_DATA;
-            mAdvertisingTimer.start(); // just start timer to check the list later
-        }
-    }
-
-    private static int mSoundcount=0;
-    private static int mAmp=0;
-    public void addAdvSoundData(byte[]data)
-    {
-
-        if((data!=null) && data.length>0) {
-            //if(mSoundcount++>=10) return;
-
-            byte[] arr=new byte[4];
-            int len=0;
-            arr[3]=data[0];
-            arr[2]=data[1];
-            arr[1]=0;
-            arr[0]=0;
-            int sounddata;
-            sounddata=ByteBuffer.wrap(arr).getInt();
-/*            int min;
-            int max;
-            min=max=sounddata=ByteBuffer.wrap(arr).getInt();
-            Log.i(LOG_TAG,"sound data:"+sounddata);
-            Log.i(LOG_TAG,"sound data: "+Arrays.toString(data));
-
-            if(data.length%2==0)
-                len=data.length;
-            else
-                len=data.length-1;
-            for (int i = 0; i < len; i+=2) {
-                arr[0]=0;
-                arr[1]=0;
-                arr[2]=data[i+1];
-                arr[3]=data[i];
-                sounddata=ByteBuffer.wrap(arr).getInt();
-                //Log.i(LOG_TAG,"sound data " +i + ":"+sounddata);
-
-                if (sounddata < min) min = sounddata;
-                if (sounddata> max) max = sounddata;
-            }
-            if(mAmp < max - min) mAmp= max - min;
-            Log.i(LOG_TAG,"sound data: max amp:"+mAmp);*/
-
-
-            if(mSoundcount++==100)
-            {//filter 1000 dataset
-
-                Log.i(LOG_TAG,"sound data: max amp:"+sounddata);
-                Log.i(LOG_TAG,"sound data: "+Arrays.toString(data));
-
-                ClhAdvertisedData advData = new ClhAdvertisedData();
-                advData.setSourceID(mClhID);
-                advData.setDestId((byte) 0);
-                advData.setThingyDataType((byte) 1);
-                advData.setThingyId((byte) 1);
-                advData.setHopCount((byte) 0);
-                //advData.setSoundPower(mAmp);sounddata
-                advData.setSoundPower(sounddata);
-                addAdvPacketToBuffer(advData,true);
-                ClhAdvertisedData temp=mClhAdvDataList.get(mClhAdvDataList.size()-1);
-                Log.i(LOG_TAG,"add new sound data:"+ Arrays.toString( temp.getParcelClhData()));
-                mSoundcount=0;
-                mAmp=0;
-            }
-        }
+        return ClhErrors.ERROR_CLH_NO;
     }
 
     public void clearAdvList()
@@ -553,4 +391,49 @@ block:
         mClhAdvDataList.clear();
     }
 
+    //set Cluster head ID
+    public void setAdvClhID(byte clhID, boolean isSink){  //set Cluster Head ID for advertiser
+        mClhID=clhID;
+        mIsSink=isSink;
+    }
+
+    public void setAdvSettings(byte[] settings)
+    {
+        Log.i(LOG_TAG, "Start Setting Advertizing params func");
+
+        if(settings==null)
+        {   // default advertising: low power, name and UUID , no TX power
+            mAdvsettings[ADV_SETTING_BYTE_MODE] = ADV_SETTING_MODE_LOWPOWER;
+            mAdvsettings[ADV_SETTING_BYTE_SENDNAME] = ADV_SETTING_SENDNAME_YES;
+            mAdvsettings[ADV_SETTING_BYTE_SENDTXPOWER] = ADV_SETTING_SENDTXPOWER_NO;
+
+        }
+        else{
+            int len = Math.min(mAdvsettings.length, settings.length);
+            mAdvsettings=Arrays.copyOfRange(settings,0,len);
+        }
+        Log.i(LOG_TAG, "End Setting Advertizing params func");
+    }
+
+    public void setAdvInterval(long interval)
+    {
+        if (interval<=0)
+        {
+            mAdvInterval=MAX_ADVERTISING_INTERVAL;
+        }
+        else
+        {
+            mAdvInterval=interval;
+        }
+    }
+
+    public ArrayList<ClhAdvertisedData> getAdvertiseList()
+    {
+        return mClhAdvDataList;
+    }
+
+    public final byte[] getAdvSettings()
+    {
+        return mAdvsettings;
+    }
 }

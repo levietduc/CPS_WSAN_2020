@@ -91,8 +91,7 @@ public class ClhAdvertisedData   {
 
     public int getSourcePacketID()
     {
-        int sourcePacketID= (int)(ClhAdvData[SOURCE_CLH_ID_POS]<<8)+((int)(ClhAdvData[PACKET_CLH_ID_POS])&0x00FF);
-        return sourcePacketID;
+        return (ClhAdvData[SOURCE_CLH_ID_POS]<<8)+((int)(ClhAdvData[PACKET_CLH_ID_POS])&0x00FF);
     }
 
     public byte getSourceID()
@@ -115,8 +114,7 @@ public class ClhAdvertisedData   {
     public byte getThingyDataType(){return ClhAdvData[THINGY_DATA_TYPE_POS];}
     public int getSoundPower()
     {
-        int soundPower=(int)(ClhAdvData[SOUND_POWER_POSH]<<8)+((int)(ClhAdvData[SOUND_POWER_POSL])&0x00FF);
-        return soundPower;
+        return (ClhAdvData[SOUND_POWER_POSH]<<8)+((int)(ClhAdvData[SOUND_POWER_POSL])&0x00FF);
     }
 
 }
