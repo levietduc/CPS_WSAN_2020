@@ -79,9 +79,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-import no.nordicsemi.android.nrfthingy.ClusterHead.AdvertiseClusterHead;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhAdvertise;
 import no.nordicsemi.android.nrfthingy.ClusterHead.ClhErrors;
-import no.nordicsemi.android.nrfthingy.ClusterHead.ScanClusterHead;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhScan;
 import no.nordicsemi.android.nrfthingy.common.ScannerFragmentListener;
 import no.nordicsemi.android.nrfthingy.common.Utils;
 import no.nordicsemi.android.nrfthingy.database.DatabaseContract.ThingyDbColumns;
@@ -277,16 +277,16 @@ public class EnvironmentServiceFragment extends Fragment implements ScannerFragm
 
     //==============
     // PSG edit
-    private Button mAdvertiseButton;
+   private Button mAdvertiseButton;
     private Button mNextButton;
     private final String LOG_TAG="My Tag:";
-    AdvertiseClusterHead mAdvertiser= new AdvertiseClusterHead();
+    ClhAdvertise mAdvertiser= new ClhAdvertise();
     private byte[] mAdvData= {10,1,2,3,4,5,6,7,8,9,10};
-    byte[] mAdvSettings={AdvertiseClusterHead.ADV_SETTING_MODE_LOWLATENCY,
-            AdvertiseClusterHead.ADV_SETTING_SENDNAME_YES,
-            AdvertiseClusterHead.ADV_SETTING_SENDTXPOWER_NO};
+    byte[] mAdvSettings={ClhAdvertise.ADV_SETTING_MODE_LOWLATENCY,
+            ClhAdvertise.ADV_SETTING_SENDNAME_YES,
+            ClhAdvertise.ADV_SETTING_SENDTXPOWER_NO};
 
-    ScanClusterHead mScanner=new ScanClusterHead();
+    ClhScan mScanner=new ClhScan();
 
     public interface EnvironmentServiceListener {
         LinkedHashMap<String, String> getSavedTemperatureData(final BluetoothDevice device);
@@ -346,14 +346,24 @@ public class EnvironmentServiceFragment extends Fragment implements ScannerFragm
         mDatabaseHelper = new DatabaseHelper(getActivity());
 
         //PSG
-        mAdvertiseButton = (Button) rootView.findViewById(R.id.adv_btn);
+/*
+        mAdvertiseButton = (Button) rootView.findViewById(R.id.startClh_btn);
         mNextButton=(Button) rootView.findViewById(R.id.next_btn);
 
         mAdvertiser.setAdvInterval(10000);
-        mAdvertiser.setAdvSettings(new byte[] {AdvertiseClusterHead.ADV_SETTING_MODE_LOWLATENCY,
-                                    AdvertiseClusterHead.ADV_SETTING_SENDNAME_YES,
-                                    AdvertiseClusterHead.ADV_SETTING_SENDTXPOWER_NO});
+        mAdvertiser.setAdvSettings(new byte[] {ClhAdvertise.ADV_SETTING_MODE_LOWLATENCY,
+                                    ClhAdvertise.ADV_SETTING_SENDNAME_YES,
+                                    ClhAdvertise.ADV_SETTING_SENDTXPOWER_NO});
 
+
+
+        int error=mAdvertiser.initCLHAdvertiser();
+        if(error!= ClhErrors.ERROR_CLH_NO)
+        {
+            mNextButton.setEnabled(false);
+            mAdvertiseButton.setEnabled(false);
+
+        }
 
         mScanner.BLE_scan();
 
@@ -361,13 +371,6 @@ public class EnvironmentServiceFragment extends Fragment implements ScannerFragm
             @Override
             public void onClick(View v) {
                 Resources res = getResources();
-                int error=mAdvertiser.initCLHAdvertiser();
-                if(error!= ClhErrors.ERROR_CLH_NO)
-                {
-                    mNextButton.setEnabled(false);
-                    mAdvertiseButton.setEnabled(false);
-
-                }
 
                 Log.i(LOG_TAG, mAdvertiseButton.getText().toString());
                 if (mAdvertiseButton.getText().toString().equals("Start Advertise")) {
@@ -394,7 +397,7 @@ public class EnvironmentServiceFragment extends Fragment implements ScannerFragm
                 mAdvData[1]++;
                 mAdvertiser.updateCLHdata(mAdvData);
             }
-        });
+        });*/
 
 
         if (toolbarEnvironment != null) {

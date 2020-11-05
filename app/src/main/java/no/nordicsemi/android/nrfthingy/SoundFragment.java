@@ -46,6 +46,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.os.Bundle;
 import android.os.Handler;
 import androidx.annotation.NonNull;
@@ -59,17 +60,38 @@ import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.viewpager.widget.ViewPager;
 import androidx.appcompat.widget.Toolbar;
+
+import android.text.Editable;
 import android.text.SpannableString;
+import android.text.TextWatcher;
+import android.util.Log;
+import android.util.SparseArray;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.getkeepsafe.taptargetview.TapTarget;
 import com.getkeepsafe.taptargetview.TapTargetSequence;
+import com.google.android.material.textfield.TextInputLayout;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Objects;
+
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhAdvertise;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhAdvertisedData;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhErrors;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhProcessData;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhScan;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClusterHead;
 import no.nordicsemi.android.nrfthingy.common.MessageDialogFragment;
 import no.nordicsemi.android.nrfthingy.common.PermissionRationaleDialogFragment;
 import no.nordicsemi.android.nrfthingy.common.Utils;
@@ -217,12 +239,20 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
         public void onMicrophoneValueChangedEvent(BluetoothDevice bluetoothDevice, final byte[] data) {
             if (data != null) {
                 if (data.length != 0) {
+
+
                     mHandler.post(new Runnable() {
                         @Override
                         public void run() {
                             mVoiceVisualizer.draw(data);
+
                         }
                     });
+
+                    //PSG edit
+                    if( mStartPlayingAudio = true)
+                         mClhAdvertiser.addAdvSoundData(data);
+
                 }
             }
         }
@@ -263,6 +293,36 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
         }
         mThingySdkManager = ThingySdkManager.getInstance();
     }
+
+
+    //PSG edit
+
+    private Button mAdvertiseButton;
+    private EditText mClhIDInput;
+    private TextView mClhLog;
+    private final String LOG_TAG="CLH Sound";
+
+    private byte[] mAdvData= {10,1,2,3,4,5,6,7,8,9,10};
+    byte[] mAdvSettings={ClhAdvertise.ADV_SETTING_MODE_LOWLATENCY,
+            ClhAdvertise.ADV_SETTING_SENDNAME_YES,
+            ClhAdvertise.ADV_SETTING_SENDTXPOWER_NO};
+    private ArrayList<ClhAdvertisedData> mAdvDataArr;
+    private ArrayList<ClhAdvertisedData> mProcDataArr=new ArrayList<ClhAdvertisedData>(64);
+    private ClhAdvertisedData mClhData=new ClhAdvertisedData();
+    private boolean mIsSink=false;
+    private byte mClhID=2;
+    private byte mClhPacketID=1;
+    private byte mClhDestID=0;
+    private byte mClhHops=2;
+    private byte mClhThingyID=1;
+    private byte mClhThingyType=1;
+    private int mClhThingySoundPower=100;
+
+
+    ClusterHead mClh;
+    ClhAdvertise mClhAdvertiser;
+    ClhScan mClhScanner;
+    ClhProcessData mClhProcessor;
 
     @Nullable
     @Override
@@ -351,13 +411,15 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
             }
         });
 
-        mThingy.setOnClickListener(new View.OnClickListener() {
+
+         mThingy.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (mThingySdkManager.isConnected(mDevice)) {
                     if (!mStartPlayingAudio) {
                         mStartPlayingAudio = true;
                         startThingyOverlayAnimation();
+
                         mThingySdkManager.enableThingyMicrophone(mDevice, true);
                     } else {
                         mThingySdkManager.enableThingyMicrophone(mDevice, false);
@@ -385,6 +447,186 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
         }
 
         loadFeatureDiscoverySequence();
+
+
+        //PSG edit
+
+        mAdvertiseButton = (Button) rootView.findViewById(R.id.startClh_btn);
+        mClhIDInput=(EditText) rootView.findViewById(R.id.clhIDInput_text);
+        mClhLog=(TextView) rootView.findViewById(R.id.logClh_text);
+
+
+        /*mAdvertiser.setAdvInterval(1000);
+        mAdvertiser.setAdvSettings(new byte[] {ClhAdvertise.ADV_SETTING_MODE_LOWLATENCY,
+                ClhAdvertise.ADV_SETTING_SENDNAME_YES,
+                ClhAdvertise.ADV_SETTING_SENDTXPOWER_NO});
+        mAdvDataArr=mAdvertiser.getAdvertiseList();
+        mAdvertiser.setClhID(mClhID);  //set ID to advertiser
+        int error=mAdvertiser.initCLHAdvertiser();
+
+
+
+        if(error!= ClhErrors.ERROR_CLH_NO)
+        {
+            mAdvertiseButton.setEnabled(false);
+        }
+
+
+        mScanner.setCLH_ID(mAdvertiser.getCLH_ID()); //sync ID of advertiser and scanner
+        mScanner.setAdvertiseObject(mAdvertiser);
+        //mScanner.setReturnAdvertiseArr(mAdvDataArr);
+        mScanner.setReturnProcessArr(mProcDataArr);
+        mScanner.setCLH_ID(mClhID);
+        mScanner.BLE_scan();*/
+
+        //mClhIDInput.setText(mClhID); //set text on Input text box
+        mClh=new ClusterHead(mClhID);
+        mClh.initClhBLE(200);
+        mClhAdvertiser=mClh.getClhAdvertiser();
+        mClhScanner=mClh.getClhScanner();
+        mClhProcessor=mClh.getClhProcessor();
+
+        final Handler handler=new Handler();
+        handler. postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                handler.postDelayed(this, 1000); //loop every cycle
+                ArrayList<ClhAdvertisedData> procList=mClhProcessor.getProcessDataList();
+                for(int i=0; i<procList.size();i++)
+                {
+                    if(i==10) break; //just display 10 line in one cycle
+                    byte[] data=procList.get(0).getParcelClhData();
+                    mClhLog.append(Arrays.toString(data));
+                    mClhLog.append("\r\n");
+                    procList.remove(0);
+                }
+            }
+        }, 1000); //the time you want to delay in milliseconds
+
+        mAdvertiseButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Resources res = getResources();
+
+                Log.i(LOG_TAG, mAdvertiseButton.getText().toString());
+                if (mAdvertiseButton.getText().toString().equals("Start")) {
+                    mAdvertiseButton.setText("Stop");
+                    mClhIDInput.setEnabled(false);
+
+                    mClh.clearClhAdvList(); //empty list before starting
+
+                    String strEnteredVal = mClhIDInput.getText().toString();
+                    if ((strEnteredVal.compareTo("") == 0) || (strEnteredVal == null)) {
+
+
+                        mClhIDInput.setText(Integer.toString((int) mClhID));
+                        Log.i(LOG_TAG, "error: ClhID must be in 0-127");
+                        Log.i(LOG_TAG, "set ClhID default:"+mClhID);
+
+                    } else {
+                        int num = Integer.valueOf(strEnteredVal);
+                        mClhID = (byte) num;
+                        mIsSink = mClh.setClhID(mClhID);
+                        Log.i(LOG_TAG, "set ClhID:"+mClhID);
+                    }
+                    if(mClhID==127) {
+                        //mClhID = 1;
+                        mClhPacketID = 1;
+                        mClhThingySoundPower = 100;
+                        mClhData.setSourceID(mClhID);
+                        mClhData.setPacketID(mClhPacketID);
+                        mClhData.setDestId(mClhDestID);
+                        mClhData.setHopCount(mClhHops);
+                        mClhData.setThingyId(mClhThingyID);
+                        mClhData.setThingyDataType(mClhThingyType);
+                        mClhData.setSoundPower(mClhThingySoundPower);
+                        //vinh,mAdvDataArr.clear();
+                        //mAdvDataArr.add(mClhData);
+                        mClhAdvertiser.addAdvPacketToBuffer(mClhData,true);
+                        for (int i = 0; i < 100; i++) {
+                            ClhAdvertisedData clh = new ClhAdvertisedData();
+                            clh.Copy(mClhData);
+                            //Log.i(LOG_TAG, "Array old:" + Arrays.toString(clh.getParcelClhData()));
+
+                            mClhThingySoundPower += 10;
+                            clh.setSoundPower(mClhThingySoundPower);
+                            //mClhPacketID++;
+                            //clh.setPacketID(mClhPacketID);
+                            //vinh, mAdvDataArr.add(clh);
+                            mClhAdvertiser.addAdvPacketToBuffer(clh,true);
+
+                            Log.i(LOG_TAG, "Array new:" + Arrays.toString(clh.getParcelClhData()));
+                            //Log.i(LOG_TAG, "Array list size:" + mAdvDataArr.size());
+                            Log.i(LOG_TAG, "Array list size:" + mClhAdvertiser.getAdvertiseList().size());
+                        }
+                        Log.i(LOG_TAG, "mClhData:" + Arrays.toString(mAdvData));
+                        ClhAdvertisedData temp;
+                        ArrayList<ClhAdvertisedData> temp1=mClhAdvertiser.getAdvertiseList();
+                        for (int i = 0; i < 20; i++) {
+                            //vinh, temp = mAdvDataArr.get(j);
+                            //vinh
+                            if((temp1==null)||(temp1.size() <20)) {
+                                Log.i(LOG_TAG, "temp1 null, size"+ temp1.size());
+                            }
+                            else{
+                                temp = temp1.get(i);
+                                Log.i(LOG_TAG, "Array final:" + Arrays.toString(temp.getParcelClhData()));
+
+                            }
+                        }
+                    }
+
+                    mClhAdvertiser.nextAdvertisingPacket();
+                    //mAdvData=mClhData.getParcelClhData();
+                    //mAdvertiser.updateCLHdata(mAdvData);
+                }
+                else
+                {
+                    mAdvertiseButton.setText("Start");
+                    mClhIDInput.setEnabled(true);
+
+                    mClhAdvertiser.stopCLHdata();
+                }
+            }
+        });
+        mClhIDInput.setText(Integer.toString((int)mClhID));
+
+
+
+       /* mClhIDInput.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+
+            public void onFocusChange(View v, boolean hasFocus) {
+                if (!hasFocus) {
+
+                    //if (mClhIDInput.getText() != null) {
+                        String strEnteredVal = mClhIDInput.getText().toString();
+
+                        Log.i(LOG_TAG, "error1:" + strEnteredVal.length());
+                        if ((strEnteredVal.compareTo("") == 0) || (strEnteredVal != null)) {
+                            Log.i(LOG_TAG, "error2:");
+
+                            mClhIDInput.setText(Integer.toString((int) mClhID));
+
+                        } else {
+                            int num = Integer.valueOf(strEnteredVal);
+                            mClhID = (byte) num;
+                            mIsSink = mClh.setClhID(mClhID);
+                        }
+
+                    /*} else {
+                        Log.i(LOG_TAG, "error3:" + strEnteredVal.length());
+
+                        mClhIDInput.setText(Integer.toString((int) mClhID));
+                    }                //SAVE THE DATA
+                }
+            }
+
+                public void afterTextChanged(Editable s) {
+
+            }
+
+
+        });*/
 
         return rootView;
     }
@@ -570,6 +812,7 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
 
     private static IntentFilter createAudioRecordIntentFilter(final String address) {
         final IntentFilter intentFilter = new IntentFilter();
+
         intentFilter.addAction(Utils.EXTRA_DATA_AUDIO_RECORD + address);
         intentFilter.addAction(Utils.ERROR_AUDIO_RECORD);
         return intentFilter;

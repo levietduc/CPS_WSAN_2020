@@ -2766,9 +2766,12 @@ public class ThingyConnection extends BluetoothGattCallback {
                     byte[] data = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE;
                     add(RequestType.WRITE_DESCRIPTOR, microphoneDescriptor, data);
                 }
+
                 enableAdpcmMode(enable);
             } else {
+
                 if (isNotificationsAlreadyEnabled(microphoneDescriptor)) {
+
                     byte[] data = BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE;
                     add(RequestType.WRITE_DESCRIPTOR, microphoneDescriptor, data);
                 }

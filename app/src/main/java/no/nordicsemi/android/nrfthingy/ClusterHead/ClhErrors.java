@@ -12,4 +12,6 @@ public class ClhErrors {
 
     public static final int ERROR_CLH_SCAN_ALREADY_START=101;
 
+    public static final int ERROR_CLH_DATA_CLH_ID_MAX=201;
+
 }

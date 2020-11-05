@@ -79,7 +79,7 @@
                         android:layout_width="60dp"
                         android:layout_height="60dp"
                         android:layout_marginBottom="0dp"
-                        android:layout_marginLeft="16dp"
+                        android:layout_marginStart="16dp"
                         android:gravity="center_vertical"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintLeft_toLeftOf="parent"
@@ -125,7 +125,7 @@
                         android:layout_width="60dp"
                         android:layout_height="60dp"
                         android:layout_marginBottom="0dp"
-                        android:layout_marginRight="16dp"
+                        android:layout_marginEnd="16dp"
                         android:layout_marginTop="0dp"
                         android:gravity="center"
                         app:layout_constraintBottom_toBottomOf="parent"
@@ -158,6 +158,50 @@
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
+        <LinearLayout
+            android:id="@+id/ClusterHead_container"
+            android:layout_width="match_parent"
+            android:layout_height="170dp"
+            android:layout_marginStart="0dp"
+            android:layout_marginEnd="0dp"
+            android:orientation="vertical">
+
+            <EditText
+                android:id="@+id/logClh_text"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:ems="10"
+                android:gravity="start|top"
+                android:inputType="textMultiLine" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/startClh_btn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="0dp"
+                    android:text="Start"
+                    android:visibility="visible" />
+
+                <EditText
+                    android:id="@+id/clhIDInput_text"
+                    android:layout_width="160dp"
+                    android:layout_height="wrap_content"
+                    android:hint="ClhID: 1-127, 0: sink"
+                    android:inputType="numberDecimal"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+
+
+            </LinearLayout>
+
+        </LinearLayout>
 
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/piano_card_view"
