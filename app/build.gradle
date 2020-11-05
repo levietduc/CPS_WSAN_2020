@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "no.nordicsemi.android.nrfthingy"
-        minSdkVersion 23
+        minSdkVersion 21
         targetSdkVersion 24
         versionCode 37
         versionName "1.4.3"
