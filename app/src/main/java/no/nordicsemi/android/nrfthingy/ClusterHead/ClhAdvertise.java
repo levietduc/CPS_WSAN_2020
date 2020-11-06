@@ -294,7 +294,8 @@ public class ClhAdvertise {
         Log.i(LOG_TAG,"Start Start Advertizer func");
 
         AdvertiseSettings.Builder advSettingsBuilder = new AdvertiseSettings.Builder()
-                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_LOW)
+                //.setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_LOW)
+                .setTxPowerLevel(ClhConst.CLH_ADVERTISE_TX_POWER)
                 .setConnectable(false);
         //set operation mode: low energy to latency
         switch (settings[ADV_SETTING_BYTE_MODE]) {
