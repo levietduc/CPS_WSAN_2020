@@ -1,5 +1,7 @@
 # Main Tasks: to build a practical WSAN that can detect sound events and control necessary actuators, starting with this base code, which is developped based on The Thingy app of Nordic Semiconductor.
 
+![What is this](myimage.png)
+
 In particular, the process of collecting environmental noise, detecting sound events, and sends event information and a control response are likely as the follows:
 
 1. Setup Network Routing:  setup a network ad-hoc routing to send messages from any cluster heads to an end-user smartphone (sink node), as fast and reliable as possible.
