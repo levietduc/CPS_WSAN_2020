@@ -1,6 +1,7 @@
 package no.nordicsemi.android.nrfthingy.ClusterHead;
 
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.AdvertiseSettings;
@@ -215,9 +216,32 @@ public class ClhAdvertise {
     //----------------------------------------------------
     // parcel Sound data and add to waiting list for advertising
     private static int mSoundcount=0;
-    public void addAdvSoundData(byte[]data)
+    public void addAdvSoundData(byte[]data,  BluetoothDevice Thingy)
     {
+        //----
+        //get Thingy ID from the digits (Thingy1, Thing2,..) in the end of its name
+        String Thingyname=Thingy.getName();
+        int len=0;
+        byte ThingyID=0;
+        int i;
+        for( i=Thingyname.length()-1; i>0;i-- )
+        {//search for the digits at the end of Thingy names
+            char letter=Thingyname.charAt(i);
+            if (letter>='0' && letter<='9')
+            {
+                if(++len>3)
+                    break; //max 3 digit
+            }
+            else break;
+        }
 
+        if(len==0) ThingyID=(byte)255;
+        else { String str=Thingyname.substring(i+1);
+            ThingyID=(byte)Integer. parseInt(str);
+        }
+
+        //extract sound data,
+        // then add the Parcel include the data and ThingyID to waiting list
         if((data!=null) && data.length>0) {
             //in this demo, only the first data from the sound stream is used for sending
             byte[] arr=new byte[4];
@@ -233,8 +257,8 @@ public class ClhAdvertise {
                 ClhAdvertisedData advData = new ClhAdvertisedData();
                 advData.setSourceID(mClhID);
                 advData.setDestId((byte) 0);
-                advData.setThingyDataType((byte) 10);
-                advData.setThingyId((byte) 1);
+                advData.setThingyDataType((byte) ClhConst.THINGY_DATA_TYPE_PROCESSED_SOUND);
+                advData.setThingyId(ThingyID);
                 advData.setHopCount((byte) 0);
                 advData.setSoundPower(sounddata);
                 addAdvPacketToBuffer(advData,true);
