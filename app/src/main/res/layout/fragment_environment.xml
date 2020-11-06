@@ -44,6 +44,8 @@
     android:layout_height="match_parent"
     tools:context="no.nordicsemi.android.nrfthingy.MainActivity">
 
+
+
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
@@ -238,15 +240,23 @@
                     android:layout_height="1dp"
                     android:background="@color/onBackground" />
 
-                <com.google.android.material.button.MaterialButton
-                    style="?buttonBarButtonStyle"
-                    android:id="@+id/weather_settings"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="end"
-                    android:layout_marginEnd="16dp"
-                    android:text="@string/environment_settings_cardview" />
+                    android:orientation="vertical"
+                    >
+
+                    <com.google.android.material.button.MaterialButton
+                        style="?buttonBarButtonStyle"
+                        android:id="@+id/weather_settings"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="end"
+                        android:layout_marginEnd="16dp"
+                        android:text="@string/environment_settings_cardview" />
+                 </LinearLayout>
             </LinearLayout>
+
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
