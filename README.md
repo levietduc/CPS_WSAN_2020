@@ -1,6 +1,6 @@
 # Main Tasks: to build a practical WSAN that can detect sound events and control necessary actuators, starting with this base code, which is developped based on The Thingy app of Nordic Semiconductor.
 
-!(https://github.com/levietduc/CPS_WSAN_2020/blob/master/CPSWSANProject.png)
+!.(https://github.com/levietduc/CPS_WSAN_2020/blob/master/CPSWSANProject.png)
 
 In particular, the process of collecting environmental noise, detecting sound events, and sends event information and a control response are likely as the follows:
 
