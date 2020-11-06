@@ -48,10 +48,8 @@ project on the Google Developer Console and enable URLShortener API and use the 
 
 ### Note:
 
-* Android 4.3 or newer is required.
+* Android 7.0 or newer is required.
 
-* Tested on Samsung S3 with Android 4.3, Samsung S6 and S8 and on Nexus 5, 5X, 6, 6P, 9, Pixel and 
-Pixel XL with lollipop, Marshmallow and Nougat.
+* Tested on Samsung S8, J7, HTC U11
 
-* Location Services need to be enabled for scanning from android 6.0 Marshmallow and in addition, 
-runtime permission ACCESS_FINE_LOCATION is also required.
+* Location Services need to be enabled for scanning, runtime permission ACCESS_FINE_LOCATION is also required.
