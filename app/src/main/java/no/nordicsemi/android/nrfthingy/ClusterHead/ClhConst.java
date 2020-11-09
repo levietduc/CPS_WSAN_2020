@@ -5,7 +5,7 @@ import android.bluetooth.le.AdvertiseSettings;
 /*important constants*/
 public class ClhConst {
     //for advertiser
-    public static final String clusterHeadName="CH";
+    public static final String clusterHeadName="CH"; //max 4 characters
     public static final int MAX_ADVERTISE_LIST_ITEM=512; //max items in waiting list for advertising
     public static final int ADVERTISING_INTERVAL=200; //default 200 ms interval for each advertising packet
     public static final int THINGY_DATA_TYPE_PROCESSED_SOUND=10;

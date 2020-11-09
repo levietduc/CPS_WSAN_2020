@@ -38,13 +38,4 @@ public class ClhProcessData {
         }
     }
 
-    private void outputTotextbox(){
-        for(int i=0;i<mClhProcessDataList.size();i++)
-        {
-            if(i==10) break; //maximum output 10 string at one tick
-
-
-        }
-    }
-
 }

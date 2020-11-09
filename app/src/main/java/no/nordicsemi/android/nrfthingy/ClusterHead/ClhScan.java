@@ -50,7 +50,7 @@ public class ClhScan {
         mClhProcDataList=clhProcDataObj.getProcessDataList();
     }
 
-
+    //init BLE scanner for Cluster Head
     public int BLE_scan() {
         boolean result=true;
         byte[] advsettings=new byte[16];
