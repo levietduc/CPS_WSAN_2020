@@ -47,6 +47,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import androidx.annotation.NonNull;
@@ -92,6 +93,7 @@ import no.nordicsemi.android.nrfthingy.sound.FrequencyModeFragment;
 import no.nordicsemi.android.nrfthingy.sound.PcmModeFragment;
 import no.nordicsemi.android.nrfthingy.sound.SampleModeFragment;
 import no.nordicsemi.android.nrfthingy.sound.ThingyMicrophoneService;
+import no.nordicsemi.android.nrfthingy.thingy.Thingy;
 import no.nordicsemi.android.nrfthingy.widgets.VoiceVisualizer;
 import no.nordicsemi.android.thingylib.ThingyListener;
 import no.nordicsemi.android.thingylib.ThingyListenerHelper;
@@ -313,6 +315,48 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
     ClhScan mClhScanner;
     ClhProcessData mClhProcessor;
 
+
+    //vinh
+    private void setupLedMode() {
+        if (mDevice != null) {
+            final BluetoothDevice device = mDevice;
+            if (mThingySdkManager.isConnected(mDevice)) {
+                mThingySdkManager.setConstantLedMode(device, 255, 0,0);
+            } else {
+                Utils.showToast(getActivity(), "Please configureThingy to " + mDevice.getName() + " before you proceed!");
+            }
+        }
+    }
+    private void setupRgbColor(int color) {
+        if (mDevice != null) {
+
+            final BluetoothDevice device = mDevice;
+            if (mThingySdkManager.isConnected(mDevice)) {
+                switch(color) {
+                    case 0: //off
+                        mThingySdkManager.turnOffLed(device);
+                        break;
+                    case 1://red
+                        mThingySdkManager.setConstantLedMode(device, 255, 0, 0);
+                        break;
+                    case 2: //green
+                        mThingySdkManager.setConstantLedMode(device, 0, 255, 0);
+                        break;
+                    case 3: //blue
+                        mThingySdkManager.setConstantLedMode(device, 0, 0, 255);
+                        break;
+                    default: //white
+                        mThingySdkManager.setConstantLedMode(device, 255, 255, 255);
+                        break;
+
+                }
+            }
+        }
+
+    }
+
+
+
     //End PSG edit No.2----------------------------
 
 
@@ -441,6 +485,8 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
         loadFeatureDiscoverySequence();
 
 
+
+
         //PSG edit No.3----------------------------
         mAdvertiseButton = rootView.findViewById(R.id.startClh_btn);
         mClhIDInput= rootView.findViewById(R.id.clhIDInput_text);
@@ -474,6 +520,11 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
             }
         }, 1000); //the time you want to delay in milliseconds
 
+
+
+
+
+
         //"Start" button Click Hander
         // get Cluster Head ID (0-127) in text box to initialize advertiser
         //Then Start advertising
@@ -491,7 +542,7 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
                     mClhIDInput.setEnabled(false);
 
                     mClh.clearClhAdvList(); //empty list before starting
-
+                    setupRgbColor(1);//red LED
                     //check input text must in rang 0..127
                     String strEnteredVal = mClhIDInput.getText().toString();
                     if ((strEnteredVal.compareTo("") == 0) || (strEnteredVal == null)) {
@@ -540,6 +591,8 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
                     mAdvertiseButton.setText("Start");
                     mClhIDInput.setEnabled(true);
                     mClhAdvertiser.stopAdvertiseClhData();
+                    setupRgbColor(0);//blue LED
+
                 }
             }
         });

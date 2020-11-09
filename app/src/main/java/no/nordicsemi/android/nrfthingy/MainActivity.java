@@ -1896,6 +1896,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 break;
             case SOUND_FRAGMENT:
                 enableSoundNotifications(device, true);
+                //PSG edit
+                enableUiNotifications();
+                //PSG edit1
+
+
                 break;
             case CLOUD_FRAGMENT:
                 enableNotificationsForCloudUpload();
