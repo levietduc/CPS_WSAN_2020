@@ -45,6 +45,7 @@ import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeScanner;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -104,6 +105,7 @@ import no.nordicsemi.android.nrfthingy.common.MessageDialogFragment;
 import no.nordicsemi.android.nrfthingy.common.NFCTagFoundDialogFragment;
 import no.nordicsemi.android.nrfthingy.common.PermissionRationaleDialogFragment;
 import no.nordicsemi.android.nrfthingy.common.ProgressDialogFragment;
+import no.nordicsemi.android.nrfthingy.configuration.CancelInitialConfigurationDialogFragment;
 import no.nordicsemi.android.nrfthingy.configuration.ConfigurationActivity;
 import no.nordicsemi.android.nrfthingy.configuration.ConfirmThingyDeletionDialogFragment;
 import no.nordicsemi.android.nrfthingy.configuration.InitialConfigurationActivity;
@@ -162,9 +164,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         PermissionRationaleDialogFragment.PermissionDialogListener,
         DfuUpdateAvailableDialogFragment.DfuUpdateAvailableListener,
         NFCTagFoundDialogFragment.OnNfcTagFound,
-        EnableNFCDialogFragment.EnableNFCDialogFragmentListener {
+        EnableNFCDialogFragment.EnableNFCDialogFragmentListener,
 
-    private static final int SCAN_DURATION = 15000;
+        //--------------PSG new No.1-----------------
+        SoundFragment.ClusterThingyListener,
+        CancelInitialConfigurationDialogFragment.CancelInitialConfigurationListener
+        //------------end PSG new No.1--------------
+
+{
+
+    private static final int SCAN_DURATION = 10000;
     private LinearLayout mLocationServicesContainer;
     private NavigationView mNavigationView;
     private DrawerLayout mDrawerLayout;
@@ -207,35 +216,382 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private ImageView mBatteryLevelImg;
     private NFCTagFoundDialogFragment mNfcTagFoundDialogFragment;
 
+
+
+    //-------------PSG new No.2-------------------------------------------------
+    private static boolean mAutoConnect=false;
+    private static boolean mAutoDisConnect=false;
+    private Handler mThingyScannerHandler;
+    private int mThingyListIndex;
+    SoundFragment mSoundFragment;
+
+    private final static long THINGY_SCAN_DURATION = 5000; //scan Thingy for 5 sec
+    private boolean mIsScanningThingy;
+    private List<BluetoothDevice> mScanresults=new ArrayList<>();
+    private List<BluetoothDevice> mClusterThingies=new ArrayList<>();
+    final BluetoothLeScannerCompat mThingyScanner = BluetoothLeScannerCompat.getScanner();
+
+    @Override
+    public void onStartScanCluster(){
+        mAutoDisConnect=true;
+        mIsScanningThingy=false;
+        List<BluetoothDevice> connectDevices= mThingySdkManager.getConnectedDevices();
+
+        mSoundFragment=SoundFragment.getInstance();
+        mSoundFragment.clearOutputText();
+        mSoundFragment.addTextToOutputText("Disconnecting all devices");
+
+        //first disconnect all connected Thingies
+        if(connectDevices.size()>0)
+        {
+            Log.i("vinh1","Disconecting all devices.");
+            //start disconnect first device
+            //-> call back in mThingyListerner::onDeviceDisconnected
+            mThingySdkManager.disconnectFromThingy(connectDevices.get(0));
+            Log.i("vinh1","Disconnect device:" + connectDevices.get(0).getName());
+            mThingyScannerHandler=new Handler();
+            mThingyScannerHandler.postDelayed(waitThingyDisconnect,4000); //wait all Thingies disconnected before start scanning
+        }
+        else
+        {
+            Log.i("vinh1","Connected List Before: Empty");
+            onFinishDiconnectAll(); //if all Thingies disconnected, next: start scan for THingies
+        }
+    }
+
+    Runnable waitThingyDisconnect=new Runnable() {//time out for disconnecting all Thingies
+        @Override
+        public void run() {
+            onFinishDiconnectAll();
+        }
+    };
+
+    private void onFinishDiconnectAll(){ //finished disconnecting -> start scanning for available Thingies
+        mSoundFragment.addTextToOutputText(":Done\r\n");
+        startScanThingy();
+    }
+
+    public void startScanThingy() {
+        if(mIsScanningThingy) return; //is scanning, quit
+
+        Log.i("vinh1", "startScan Thingies");
+        mSoundFragment.addTextToOutputText("Scan Thingies");
+
+
+        final ScanSettings settings = new ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setReportDelay(1500)
+                .setUseHardwareBatchingIfSupported(false).setUseHardwareFilteringIfSupported(false).build();
+        final List<ScanFilter> filters = new ArrayList<>();
+        filters.add(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(ThingyUtils.THINGY_BASE_UUID)).build());
+        mThingyScanner.startScan(filters, settings, scanThingyCallback);
+
+        mIsScanningThingy = true;
+        mScanresults.clear(); //clear list of available Thingies
+
+        //timer to stop scan
+        mThingyScannerHandler=new Handler();
+        mThingyScannerHandler. postDelayed(mScanTimeoutRunnable,THINGY_SCAN_DURATION); //Timer for scanning duration
+    }
+
+    //scan timer expire -> ScanDone():
+    final Runnable mScanTimeoutRunnable = new Runnable() {
+        @Override
+        public void run()  {
+            mAutoDisConnect=false;
+            ScanDone();
+        }
+    };
+
+    private ScanCallback scanThingyCallback = new ScanCallback() {
+        @Override
+        public void onScanResult(final int callbackType, @NonNull final ScanResult result) {
+            // do nothing
+        }
+        @Override
+        public void onBatchScanResults(final List<ScanResult> results) {
+            BluetoothDevice device;
+
+            if (results.size() > 0) {
+                for(ScanResult result:results)
+                {//add scan results to the List
+                    device=result.getDevice();
+                    if(!mScanresults.contains(device))
+                    {
+                        mScanresults.add(device);
+                    }
+                }
+                //reach max list size -> stop -> ScanDone
+                if(mScanresults.size()>10)
+                {//find more than 10 items
+                    mThingyScannerHandler.removeCallbacks(mScanTimeoutRunnable);
+                    ScanDone();
+                }
+            }
+        }
+        @Override
+        public void onScanFailed(final int errorCode) {
+            // should never be called
+        }
+    };
+
+    public void stopScanThingy() {
+        if (mIsScanningThingy) {
+            mThingyScanner.stopScan(scanThingyCallback);
+            mThingyScannerHandler.removeCallbacks(mScanTimeoutRunnable);
+            mIsScanningThingy = false;
+        }
+    }
+
+
+    private void ScanDone()
+    {//finish scanning, display list and then start connecting to each Thingy
+        String str1=new String();
+        BluetoothDevice device;
+        stopScanThingy();
+        mSoundFragment.addTextToOutputText(":Done\r\n");
+
+        if(mScanresults.size()<=0)
+        {
+            mSoundFragment.EnableScanClusterButton();
+            mSoundFragment.addTextToOutputText("Scan Done, List: Empty\r\n");
+        }
+        else {
+            //display avalable Thingies names to textbox (mClhLog in SoundFragment)
+            mSoundFragment.addTextToOutputText("Scan Done, List: ");
+            for (BluetoothDevice result : mScanresults) {
+                mSoundFragment.addTextToOutputText(result.getName()+", ");
+            }
+            mSoundFragment.addTextToOutputText("\r\n");
+
+            //-----------------------------
+            // add your filter of mScanresult here
+            //here demo no filters, result is mClusterThingies
+            mClusterThingies=mScanresults;
+            //--------------------------------
+
+            mThingyListIndex=0; //fisrt item in the list to connect
+            mAutoConnect=true;
+            connectSelectedDevice(mClusterThingies,mThingyListIndex);
+        }
+    }
+
+    //connect to selected device
+    public void connectSelectedDevice(final List<BluetoothDevice> devices, int index) {
+
+        Log.i("vinh1", "index:"+index+" , device size:" + devices.size() );
+
+
+        BluetoothDevice device=devices.get(index);
+        mSoundFragment.addTextToOutputText("Connecting:"+device.getName());
+
+        mDevice = device;
+        final Thingy thingy = new Thingy(device);
+        mThingySdkManager.setSelectedDevice(device);
+        updateSelectionInDb(thingy, true);
+
+        showConnectionProgressDialog2();
+        startScan();    //start scan and then connect, discover each Thingy (default methods of Nordic)
+        mThingyScannerHandler.postDelayed(mThingyScannerRunable,12000); //timer for connect and discover each device
+    }
+
+    final Runnable mThingyScannerRunable = new Runnable() {
+        @Override
+        public void run()  {// stop discovering current device if timer expire, then connect next one in the available list
+            Log.i("vinh1", "discover timeout");
+            if(mThingySdkManager.isConnected(mDevice)) {
+                mThingySdkManager.disconnectFromThingy(mDevice);
+            }
+            nextThingy(false);
+        }
+    };
+
+    private void nextThingy(boolean previousResult)
+    {//select next Thingy to connect, for wrap up when finishing all items
+        hideProgressDialog();
+
+        //display to mClhLog in Sound Fragment
+        if(previousResult)
+        {
+            mSoundFragment.addTextToOutputText(": Done \r\n");
+        }
+        else{
+            mSoundFragment.addTextToOutputText(": Failed \r\n");
+        }
+
+        mProgressHandler.removeCallbacks(mProgressDialogRunnable); //stop rotating display timer
+        mThingyScannerHandler.removeCallbacks(mThingyScannerRunable); //stop time out timer
+        Handler handler=new Handler();
+        handler.postDelayed(new Runnable() {//delay for finishing discovery and send notification
+            @Override
+            public void run() {
+                mThingyListIndex++; //next item index
+                if(mThingyListIndex<mClusterThingies.size()){// not yet finished list
+                    connectSelectedDevice(mClusterThingies,mThingyListIndex); //connect next device
+                }
+                else
+                {//finished all items ->enable sound stream of each the back to Sound Fragment
+                    mAutoConnect=false;
+                    mSoundFragment.EnableScanClusterButton(); //enable scan cluster button in sound Fragment
+                    List<BluetoothDevice> connectDevices= mThingySdkManager.getConnectedDevices();
+
+                    //display list of connected device in mClhLog textbox in Sound Fragment
+                    if(connectDevices.size()>0)
+                    {
+                        Log.i("vinh1","Connected List:");
+                        mSoundFragment.addTextToOutputText("Connected devices:");
+                        for(BluetoothDevice dv:connectDevices)
+                        {
+                            Log.i("vinh1","Connected device:" + dv.getName());
+                            mSoundFragment.addTextToOutputText( dv.getName()+", ");
+                        }
+                    }
+
+                    mSoundFragment.enableSoundThingies(connectDevices); //enable collect sound stream from each Thingies
+                }
+            }
+        },1000);
+    }
+
+
+
+    private void showConnectionProgressDialog2() {
+        if (mProgressDialog == null) {
+            mProgressDialog = ProgressDialogFragment.newInstance(getString(R.string.state_connecting));
+        }
+        final Dialog dialog = mProgressDialog.getDialog();
+        if (dialog == null || !dialog.isShowing()) {
+            mProgressDialog.show(getSupportFragmentManager(), PROGRESS_DIALOG_TAG);
+        }
+        mProgressHandler.postDelayed(mProgressDialogRunnable, SCAN_DURATION);
+    }
+
+
+    @Override
+    public void cancelInitialConfiguration() {
+        if (mThingySdkManager != null) {
+            mThingySdkManager.disconnectFromThingy(mDevice);
+        }
+        super.onBackPressed();
+    }
+
+    private void updateOnDeviceAutoConnected(final BluetoothDevice device) {
+
+        Log.i("vinh1", "updateOnDeviceAutoConnected");
+
+        final List<BluetoothDevice> connectedDevices = new ArrayList<>();
+        connectedDevices.addAll(mThingySdkManager.getConnectedDevices());
+        final ArrayList<Thingy> savedDevices = mDatabaseHelper.getSavedDevices();
+        if (mDevice != null && mDevice.equals(device)) {
+            if (connectedDevices.size() > 0) {
+                mThingySdkManager.setSelectedDevice(device);
+                updateSelectionInDb(new Thingy(device), true);
+                mDevice = mThingySdkManager.getSelectedDevice();
+            } else {
+                if (savedDevices.size() > 0) {
+                    final Thingy thingy = savedDevices.get(0);//
+                    mThingySdkManager.setSelectedDevice(getBluetoothDevice(this, thingy.getDeviceAddress()));
+                    updateSelectionInDb(thingy, true);
+                    mDevice = mThingySdkManager.getSelectedDevice();
+                }
+            }
+            //invalidateOptionsMenu();
+            updateActionbarTitle(mDevice);
+            updateHeaderView(View.VISIBLE);
+            //selectDevice();
+            updateConnectedDevicesList(device);
+        }
+    }
+
+
+
+
     private ThingyListener mThingyListener = new ThingyListener() {
         @Override
         public void onDeviceConnected(BluetoothDevice device, int connectionState) {
+            Log.i("vinh1 ","device connected in onDeviceConnected");
+
             final String deviceName = mDatabaseHelper.getDeviceName(device.getAddress());
             updateProgressDialogState(getString(R.string.state_discovering_services, deviceName));
-            invalidateOptionsMenu();
             if (!mConnectedBleDeviceList.contains(device)) {
                 mConnectedBleDeviceList.add(device);
             }
 
-            updateUiOnDeviceConnected(device);
+            if(mAutoConnect){
+                updateOnDeviceAutoConnected(device);
+            }
+            else
+            {
+                invalidateOptionsMenu();
+                updateUiOnDeviceConnected(device);
+            }
+
         }
 
         @Override
         public void onDeviceDisconnected(BluetoothDevice device, int connectionState) {
-            updateBatteryLevelVisibility(View.GONE);
-            hideProgressDialog();
-            if (mConnectedBleDeviceList.contains(device)) {
-                mConnectedBleDeviceList.remove(device);
+            Log.i("vinh1 ","device disconect");
+            if(mAutoDisConnect)
+            {
+                List<BluetoothDevice> devices=mThingySdkManager.getConnectedDevices();
+
+                if (mConnectedBleDeviceList.contains(device)) {
+                    mConnectedBleDeviceList.remove(device);
+                }
+
+
+
+                if(devices.size()>0)
+                {
+                    Log.i("vinh1","Disconnecting "+devices.get(0).getName());
+                    mThingySdkManager.disconnectFromThingy(devices.get(0));
+                }
+                else
+                {
+                    mAutoDisConnect=false;
+                    mThingyScannerHandler.removeCallbacks(waitThingyDisconnect);
+                    Log.i("vinh1","All devices were Disconnected");
+                    onFinishDiconnectAll();
+                }
             }
-            updateUiOnDeviceDisconnected(device);
+            else{
+                updateBatteryLevelVisibility(View.GONE);
+                hideProgressDialog();
+                if (mConnectedBleDeviceList.contains(device)) {
+                    mConnectedBleDeviceList.remove(device);
+                }
+                updateUiOnDeviceDisconnected(device);
+            }
         }
 
         @Override
         public void onServiceDiscoveryCompleted(BluetoothDevice device) {
+            Log.i("vinh1 ","discovery complete");
+            //hideProgressDialog();
             updateBatteryLevelVisibility(View.VISIBLE);
             onServiceDiscoveryCompletion(device);
-            checkForFwUpdates();
+            //checkForFwUpdates(); //<--remove this in your code
+            //vinhstop
+            if(mAutoConnect){
+                final String address = mDevice.getAddress();
+                if (!mDatabaseHelper.isExist(address)) {
+                    mDatabaseHelper.insertDevice(address, mDevice.getName());
+                    mDatabaseHelper.updateNotificationsState(address, true, DatabaseContract.ThingyDbColumns.COLUMN_NOTIFICATION_TEMPERATURE);
+                    mDatabaseHelper.updateNotificationsState(address, true, DatabaseContract.ThingyDbColumns.COLUMN_NOTIFICATION_PRESSURE);
+                    mDatabaseHelper.updateNotificationsState(address, true, DatabaseContract.ThingyDbColumns.COLUMN_NOTIFICATION_HUMIDITY);
+                    mDatabaseHelper.updateNotificationsState(address, true, DatabaseContract.ThingyDbColumns.COLUMN_NOTIFICATION_AIR_QUALITY);
+                    mDatabaseHelper.updateNotificationsState(address, true, DatabaseContract.ThingyDbColumns.COLUMN_NOTIFICATION_COLOR);
+                    mDatabaseHelper.updateNotificationsState(address, true, DatabaseContract.ThingyDbColumns.COLUMN_NOTIFICATION_BUTTON);
+                    mDatabaseHelper.updateNotificationsState(address, true, DatabaseContract.ThingyDbColumns.COLUMN_NOTIFICATION_QUATERNION);
+                    mThingySdkManager.setSelectedDevice(mDevice);
+                }
+                updateSelectionInDb(new Thingy(mDevice), true);
+                //mThingySdkManager.enableThingyMicrophone(mDevice, true); //enable get sound stream from Thingy
+                nextThingy(true);
+            }
+
         }
+        //--------------------end PSG new No.2-------------------------------------
 
         @Override
         public void onBatteryLevelChanged(final BluetoothDevice bluetoothDevice, final int batteryLevel) {
@@ -271,6 +627,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         public void onColorIntensityValueChangedEvent(BluetoothDevice bluetoothDevice, float red, float green, float blue, float alpha) {
 
         }
+
+
+
+
 
         @Override
         public void onButtonStateChangedEvent(BluetoothDevice bluetoothDevice, final int buttonState) {
@@ -396,6 +756,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onCreate(savedInstanceState);
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         setContentView(R.layout.activity_main);
+
 
         mActivityToolbar = findViewById(R.id.toolbar);
         setSupportActionBar(mActivityToolbar);
@@ -1222,6 +1583,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void updateUiOnDeviceConnected(final BluetoothDevice device) {
+
+        Log.i("vinh1", "updateUIOnDeviceAutoConnected");
+
+
         final List<BluetoothDevice> connectedDevices = new ArrayList<>();
         connectedDevices.addAll(mThingySdkManager.getConnectedDevices());
         final ArrayList<Thingy> savedDevices = mDatabaseHelper.getSavedDevices();
@@ -1479,6 +1844,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     @Override
     public void onServiceConnected() {
+
+        Log.i("vinh1", "OnServiceConnected");
+
         //Use this binder to access you own methods declared in the ThingyService
         mBinder = (ThingyService.ThingyBinder) mThingySdkManager.getThingyBinder();
         cancelNotifications();
@@ -1539,6 +1907,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     @Override
     public void deleteThingy(BluetoothDevice device) {
+        Log.i("vinh1","delete Thingy");
+
         clearFragments();
         if (mThingySdkManager.isConnected(device)) {
             mDatabaseHelper.removeDevice(device.getAddress());
@@ -1616,8 +1986,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (mBinder != null) {
             mBinder.setScanningState(false);
         }
+        Log.i("vinh1", "Stopping scan0");
 
         if (mIsScanning) {
+            Log.i("vinh1", "Stopping scan0");
+
             Log.v(TAG, "Stopping scan");
             final BluetoothLeScannerCompat scanner = BluetoothLeScannerCompat.getScanner();
             scanner.stopScan(mScanCallback);
@@ -1647,6 +2020,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             // do nothing
             final BluetoothDevice device = result.getDevice();
             if (mAddress != null && mAddress.equals(device.getAddress())) {
+                Log.i("vinh1","scan current device finish, start connecting");
+
                 mProgressHandler.removeCallbacks(mProgressDialogRunnable);
                 stopScan();
                 connect(device);
@@ -1655,12 +2030,24 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
 
             if (device.equals(mDevice)) {
+                Log.i("vinh1","scan current device finish, start timer");
+
                 new Handler().post(new Runnable() {
                     @Override
                     public void run() {
                         mProgressHandler.removeCallbacks(mProgressDialogRunnable);
                         stopScan();
-                        connect();
+
+                        //------ PSG new No.3-------------
+
+                        new Handler().postDelayed(new Runnable() { //wait device stop scan before connecting
+                            @Override
+                            public void run() {
+                                connect();
+                            }
+                        }, 200);
+
+                        //------ end PSG new No.3---------
                     }
                 });
             }
@@ -1703,7 +2090,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             mProgressDialog = ProgressDialogFragment.newInstance(message);
             mProgressDialog.show(getSupportFragmentManager(), PROGRESS_DIALOG_TAG);
         }
-
         mProgressHandler.postDelayed(mProgressDialogRunnable, SCAN_DURATION);
     }
 
@@ -1711,6 +2097,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         @Override
         public void run() {
             hideProgressDialog();
+            Log.i("vinh1","Scanner2, hide dialog");
         }
     };
 
@@ -1724,6 +2111,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void hideProgressDialog() {
         if (mProgressDialog != null) {
+            Log.i("vinh1","Scanner2, hide dialog function");
+
+
             final Dialog dialog = mProgressDialog.getDialog();
             if (dialog != null) {
                 dialog.dismiss();
@@ -1884,6 +2274,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         mNfcTagFoundDialogFragment.show(getSupportFragmentManager(), NFC_DIALOG_TAG);
     }
 
+    public void myEnable(final BluetoothDevice device)
+    {
+        enableSoundNotifications(device, true);
+        enableUiNotifications();
+    }
+
     private void onServiceDiscoveryCompletion(final BluetoothDevice device) {
         hideProgressDialog();
         mThingySdkManager.enableBatteryLevelNotifications(device, true);
@@ -1895,7 +2291,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 enableUiNotifications();
                 break;
             case SOUND_FRAGMENT:
-                enableSoundNotifications(device, true);
+                //----------- PSG new No.4--------------
+                enableSoundNotifications(device, true); //enable receive sound data
+                enableUiNotifications(); //enable control LEDs
+                //---------- end PSG new No.4-----------
+
                 break;
             case CLOUD_FRAGMENT:
                 enableNotificationsForCloudUpload();
