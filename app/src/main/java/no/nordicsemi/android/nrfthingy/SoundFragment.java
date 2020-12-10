@@ -39,7 +39,9 @@
 package no.nordicsemi.android.nrfthingy;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.le.BluetoothLeScanner;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -47,6 +49,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.graphics.BlendMode;
 import android.os.Bundle;
 import android.os.Handler;
 import androidx.annotation.NonNull;
@@ -61,8 +64,10 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.viewpager.widget.ViewPager;
 import androidx.appcompat.widget.Toolbar;
 
+import android.os.ParcelUuid;
 import android.text.SpannableString;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -78,13 +83,17 @@ import com.getkeepsafe.taptargetview.TapTargetSequence;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import no.nordicsemi.android.nrfthingy.ClusterHead.ClhAdvertise;
 import no.nordicsemi.android.nrfthingy.ClusterHead.ClhAdvertisedData;
 import no.nordicsemi.android.nrfthingy.ClusterHead.ClhConst;
+import no.nordicsemi.android.nrfthingy.ClusterHead.ClhErrors;
 import no.nordicsemi.android.nrfthingy.ClusterHead.ClhProcessData;
 import no.nordicsemi.android.nrfthingy.ClusterHead.ClhScan;
 import no.nordicsemi.android.nrfthingy.ClusterHead.ClusterHead;
+import no.nordicsemi.android.nrfthingy.FFT.Complex;
+import no.nordicsemi.android.nrfthingy.FFT.FFT;
 import no.nordicsemi.android.nrfthingy.common.MessageDialogFragment;
 import no.nordicsemi.android.nrfthingy.common.PermissionRationaleDialogFragment;
 import no.nordicsemi.android.nrfthingy.common.Utils;
@@ -93,12 +102,19 @@ import no.nordicsemi.android.nrfthingy.sound.PcmModeFragment;
 import no.nordicsemi.android.nrfthingy.sound.SampleModeFragment;
 import no.nordicsemi.android.nrfthingy.sound.ThingyMicrophoneService;
 import no.nordicsemi.android.nrfthingy.widgets.VoiceVisualizer;
+import no.nordicsemi.android.support.v18.scanner.BluetoothLeScannerCompat;
+import no.nordicsemi.android.support.v18.scanner.ScanCallback;
+import no.nordicsemi.android.support.v18.scanner.ScanFilter;
+import no.nordicsemi.android.support.v18.scanner.ScanResult;
+import no.nordicsemi.android.support.v18.scanner.ScanSettings;
 import no.nordicsemi.android.thingylib.ThingyListener;
 import no.nordicsemi.android.thingylib.ThingyListenerHelper;
 import no.nordicsemi.android.thingylib.ThingySdkManager;
 import no.nordicsemi.android.thingylib.utils.ThingyUtils;
 
-public class SoundFragment extends Fragment implements PermissionRationaleDialogFragment.PermissionDialogListener {
+public class SoundFragment extends Fragment implements PermissionRationaleDialogFragment.PermissionDialogListener
+
+{
 
 
     private static final String AUDIO_PLAYING_STATE = "AUDIO_PLAYING_STATE";
@@ -244,10 +260,52 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
                         }
                     });
 
+
                     //PSG edit No.1
                     //audio receive event
-                    if( mStartPlayingAudio = true)
-                         mClhAdvertiser.addAdvSoundData(data);
+                    Log.i(LOG_TAG,"process sound data:name" + bluetoothDevice.getName() + "data size:" +data.length);
+
+                    mHandler.post(new Runnable() {
+                          @Override
+                          public void run() {
+
+                              final int mNumberOfFFTPoints = data.length; // 512, it should be power of 2
+                              double mMaxFFTSample;
+
+                              double temp;
+                              Complex[] y;
+                              Complex[] complexSignal = new Complex[mNumberOfFFTPoints];
+                              double[] absSignal = new double[mNumberOfFFTPoints / 2];
+
+
+                              for (int i = 0; i < mNumberOfFFTPoints / 2; i++) {
+                                  temp = (double) ((data[2 * i] & 0xFF) | (data[2 * i + 1] << 8)) / 32768.0F;
+                                  complexSignal[i] = new Complex(temp, 0.0);
+                              }
+
+                              //                    Compute FFT
+
+                              y = FFT.fft(complexSignal); // --> Here I use FFT class
+
+                              mMaxFFTSample = 0.0;
+                              int mPeakPos = 0;
+                              for (int i = 0; i < (mNumberOfFFTPoints / 2); i++) {
+                                  absSignal[i] = Math.sqrt(Math.pow(y[i].re(), 2) + Math.pow(y[i].im(), 2));
+                                  if (absSignal[i] > mMaxFFTSample) {
+                                      mMaxFFTSample = absSignal[i];
+                                      mPeakPos = i;
+                                  }
+                              }
+
+                              Log.i(LOG_TAG, "main frequency is " + mPeakPos);
+                          }
+                      });
+
+                        //-------- PSG new No.1-----------------
+                    //if( mStartPlayingAudio = true)
+                    mClhAdvertiser.addAdvSoundData(data);
+                    //----  end PSG new No.1----------------
+
                     //End PSG edit No.1
 
                 }
@@ -274,11 +332,17 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
         }
     };
 
+
     public static SoundFragment newInstance(final BluetoothDevice device) {
         SoundFragment fragment = new SoundFragment();
         final Bundle args = new Bundle();
         args.putParcelable(Utils.CURRENT_DEVICE, device);
         fragment.setArguments(args);
+
+        //------------ PSG new No.2------------
+        mSoundFragment=fragment;
+        //-----------end PSG new No.2--------------
+
         return fragment;
     }
 
@@ -312,6 +376,34 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
     ClhAdvertise mClhAdvertiser;
     ClhScan mClhScanner;
     ClhProcessData mClhProcessor;
+
+    //-------------- PSG new No.3-------------------------
+    public interface ClusterThingyListener {
+        void onStartScanCluster();
+    }
+
+    private Button mClusterButton;
+    private static SoundFragment mSoundFragment;
+    public static SoundFragment getInstance(){return  mSoundFragment;}
+    public void EnableScanClusterButton(){
+        mClusterButton.setEnabled(true);
+        mClusterButton.setText("SCAN CLUSTER");
+    }
+
+    public void enableSoundThingies(List<BluetoothDevice> devices)
+    {
+        for(BluetoothDevice device:devices)
+        {
+            mThingySdkManager.enableThingyMicrophone(device,true);
+        }
+    }
+
+    public void clearOutputText(){ mClhLog.setText("");}
+
+    public void addTextToOutputText(String str1){mClhLog.append(str1);}
+
+    //--------------------- end PSG new No.3--------------------------
+
 
     //End PSG edit No.2----------------------------
 
@@ -361,6 +453,8 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
         mThingyOverlay = rootView.findViewById(R.id.thingyOverlay);
         mVoiceVisualizer = rootView.findViewById(R.id.voice_visualizer);
 
+
+
         // Prepare the sliding tab layout and the view pager
         final TabLayout mTabLayout = rootView.findViewById(R.id.sliding_tabs);
         final ViewPager pager = rootView.findViewById(R.id.view_pager);
@@ -404,7 +498,7 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
         });
 
 
-         mThingy.setOnClickListener(new View.OnClickListener() {
+        mThingy.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (mThingySdkManager.isConnected(mDevice)) {
@@ -445,7 +539,6 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
         mAdvertiseButton = rootView.findViewById(R.id.startClh_btn);
         mClhIDInput= rootView.findViewById(R.id.clhIDInput_text);
         mClhLog= rootView.findViewById(R.id.logClh_text);
-
         //initial Clusterhead: advertiser, scanner, processor
         mClh=new ClusterHead(mClhID);
         mClh.initClhBLE(ClhConst.ADVERTISING_INTERVAL);
@@ -474,6 +567,21 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
             }
         }, 1000); //the time you want to delay in milliseconds
 
+
+        //-------  PSG new No.4-------------------
+        mClusterButton= rootView.findViewById(R.id.cluster_button);
+        mClusterButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Resources res = getResources();
+                mClusterButton.setEnabled(false);
+                mClusterButton.setText("SCANNING");
+                final ClusterThingyListener listener = (ClusterThingyListener) requireActivity();
+                listener.onStartScanCluster();
+            }
+        });
+        //---------- end PSG new No.4---------------------
+
+
         //"Start" button Click Hander
         // get Cluster Head ID (0-127) in text box to initialize advertiser
         //Then Start advertising
@@ -487,6 +595,7 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
 
                 Log.i(LOG_TAG, mAdvertiseButton.getText().toString());
                 if (mAdvertiseButton.getText().toString().equals("Start")) {
+
                     mAdvertiseButton.setText("Stop");
                     mClhIDInput.setEnabled(false);
 
@@ -531,7 +640,7 @@ public class SoundFragment extends Fragment implements PermissionRationaleDialog
                             Log.i(LOG_TAG, "Add array:" + Arrays.toString(clh.getParcelClhData()));
                             Log.i(LOG_TAG, "Array new size:" + mClhAdvertiser.getAdvertiseList().size());
                         }
-                      }
+                    }
 
                     mClhAdvertiser.nextAdvertisingPacket(); //start advertising
                 }
